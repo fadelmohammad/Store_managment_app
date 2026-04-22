@@ -129,6 +129,13 @@ def create_tables(conn):
         )"""
         )
 
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+            )"""
+        )
+
 
 def seed_ledger_accounts(conn):
     """Initializes the Chart of Accounts."""

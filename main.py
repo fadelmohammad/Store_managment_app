@@ -4,6 +4,9 @@ import customtkinter as ctk
 from database.connection import DatabaseConnection
 from database.schema import create_tables, seed_ledger_accounts, insert_dummy_data
 from database.repositories.product_repo import ProductRepository
+from database.repositories.stock_movement_repo import StockMovementRepository
+from database.repositories.category_repo import CategoryRepository
+from database.repositories.settings_repo import SettingRepository
 from services.inventory_service import InventoryService
 from database.core import Database
 from services.ledger_service import LedgerService
@@ -28,8 +31,11 @@ class StoreApp(ctk.CTk):
         self.db_connection = DatabaseConnection()
         self.conn = self.db_connection.get_connection()
 
-        self.product_repo = ProductRepository(self.conn)
-        self.inventory_service = InventoryService(self.product_repo)
+        self.stock_repo = StockMovementRepository(self.conn)
+        self.product_repo = ProductRepository(self.conn, self.stock_repo)
+        self.inventory_service = InventoryService(self.product_repo, self.stock_repo)
+        self.category_repo = CategoryRepository(self.conn)
+        self.setting_repo = SettingRepository(self.conn)
 
         create_tables(self.conn)
         seed_ledger_accounts(self.conn)
@@ -51,7 +57,7 @@ class StoreApp(ctk.CTk):
         self.purchase_service = PurchaseService(self.db, self.ledger_service)
 
         # Load the rate from DB, fallback to 15000 if not found
-        saved_rate = self.db.get_setting("exchange_rate", "15000")
+        saved_rate = self.setting_repo.get("exchange_rate", "15000")
         self.exchange_rate = float(saved_rate)
 
         # --- NAVIGATION STATE ---

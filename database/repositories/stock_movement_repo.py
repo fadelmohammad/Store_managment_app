@@ -1,6 +1,6 @@
 # stock_movement_repo.py
 
-class StockMovementRepo:
+class StockMovementRepository:
 	def __init__(self, conn):
 		self.conn = conn
 

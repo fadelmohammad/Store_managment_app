@@ -8,7 +8,6 @@ class InventoryFrame(ctk.CTkFrame):
     def __init__(self, parent, app, db):
         super().__init__(parent)
         self.app = app
-        self.db = db
         self.selected_product_id = None
 
         # --- NAVIGATION BAR ---
@@ -205,7 +204,7 @@ class InventoryFrame(ctk.CTkFrame):
 
         def save():
             p_id = self.cat_map.get(parent_var.get())  # None if "None"
-            self.db.add_category(name_ent.get(), p_id)
+            self.app.category_repo.add(name_ent.get(), p_id)
             self.refresh_category_list()
             pop.destroy()
 
@@ -225,7 +224,7 @@ class InventoryFrame(ctk.CTkFrame):
                 "Confirm",
                 f"Delete '{target_path}'?\nProducts will move to the parent level.",
             ):
-                self.db.delete_category(cat_id)
+                self.app.category_repo.delete(cat_id)
                 self.refresh_category_list()
                 # Update the popup dropdown values too
                 parent_opts = ["None"] + list(self.cat_map.keys())
@@ -273,7 +272,7 @@ class InventoryFrame(ctk.CTkFrame):
 
     def refresh_category_list(self):
         """Updates the dropdown with the latest Electrical > Lights > Bulbs paths."""
-        cats = self.db.get_all_categories_flat()
+        cats = self.app.category_repo.get_all_flat()
         self.cat_map = {c["path"]: c["id"] for c in cats}
         paths = list(self.cat_map.keys())
         self.cat_dropdown.configure(values=paths if paths else ["No Categories"])
@@ -283,12 +282,12 @@ class InventoryFrame(ctk.CTkFrame):
         if not sel:
             return
         self.selected_product_id = sel[0]
-        p = self.db.get_product_by_id(self.selected_product_id)
+        p = self.app.product_repo.get_by_id(self.selected_product_id)
         if p:
             self.clear_form(keep_id=True)
             self.name_entry.insert(0, p["name"])
             # Find the path for this product's category_id and set the dropdown
-            full_path = self.db.get_category_path(p["category_id"])
+            full_path = self.app.category_repo.get_path(p["category_id"])
             self.category_var.set(full_path)
             self.cost_entry.insert(0, str(p["cost"]))
             self.price_entry.insert(0, str(p["price"]))
@@ -316,7 +315,7 @@ class InventoryFrame(ctk.CTkFrame):
     def add_product(self):
         try:
             data = self.get_form_data()
-            self.db.add_product(*data)
+            self.app.product_repo.add(*data)
             self.refresh_data()
             self.clear_form()
             messagebox.showinfo("Success", "Product added.")
@@ -328,7 +327,7 @@ class InventoryFrame(ctk.CTkFrame):
             return
         try:
             data = self.get_form_data()
-            self.db.update_product(self.selected_product_id, *data)
+            self.app.product_repo.update(self.selected_product_id, *data)
             self.refresh_data()
             messagebox.showinfo("Success", "Product updated.")
         except Exception as e:
@@ -338,7 +337,7 @@ class InventoryFrame(ctk.CTkFrame):
         if not self.selected_product_id:
             return
         if messagebox.askyesno("Confirm", "Delete this product?"):
-            self.db.delete_product(self.selected_product_id)
+            self.app.product_repo.delete(self.selected_product_id)
             self.refresh_data()
             self.clear_form()
 
@@ -364,7 +363,7 @@ class InventoryFrame(ctk.CTkFrame):
             return
 
         product_name = self.name_entry.get()
-        history_data = self.db.get_product_history(self.selected_product_id)
+        history_data = self.app.product_repo.get_history(self.selected_product_id)
 
         # Create the popup window
         history_win = ctk.CTkToplevel(self)
@@ -441,9 +440,9 @@ class InventoryFrame(ctk.CTkFrame):
     def open_history_popup(self, mode, target_id, title_name):
         is_prod = mode == "PRODUCT"
         history_data = (
-            self.db.get_product_history(target_id)
+            self.app.product_repo.get_history(target_id)
             if is_prod
-            else self.db.get_category_history(target_id)
+            else self.app.category_repo.get_history(target_id)
         )
 
         win = ctk.CTkToplevel(self)
@@ -498,7 +497,7 @@ class InventoryFrame(ctk.CTkFrame):
             )
 
             if confirm:
-                self.db.bulk_update_prices(final_pct)
+                self.app.product_repo.bulk_update_prices(final_pct)
                 self.refresh_data()  # Refresh the table to show new prices
                 self.bulk_pct_entry.delete(0, "end")
                 messagebox.showinfo("Success", f"All prices {action_text}d by {pct}%.")

@@ -2,7 +2,7 @@
 
 
 class ProductRepository:
-    def __init__(self, conn):
+    def __init__(self, conn, stock_repo):
         self.conn = conn
 
     def get_all(self):
@@ -12,8 +12,8 @@ class ProductRepository:
                 p.*, 
                 c.name AS category
             FROM products p
-            ORDER BY p,name
             LEFT JOIN categories c ON p.category_id = c.id
+            ORDER BY p.name
             """
         ).fetchall()
 
@@ -31,23 +31,27 @@ class ProductRepository:
                 (name, category_id, price, cost, quantity, min_threshold),
             )
 
-    def update(self, product_id, name, category_id, price, cost, quantity, min_threshold):
+    def update(self, product_id, name, category_id, price, cost, quantity, min_threshold, movement_type, reason):
         with self.conn:
             self.conn.execute(
-                "UPDATE products SET name=?, category_id=?, price=?, cost=?, quantity=?, min_threshold=? WHERE id=?",
-                (name, category_id, price, cost, quantity, min_threshold, product_id),
+                "UPDATE products SET name=?, category_id=?, price=?, min_threshold=? WHERE id=?",
+                (name, category_id, price, min_threshold, product_id),
             )
+        self.update_cost(product_id, cost)
+        self.update_quantity(product_id, quantity, movement_type, reason)
 
     def delete(self, product_id):
         with self.conn:
             self.conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
 
-    def update_quantity(self, product_id, new_qty):
+    def update_quantity(self, product_id, new_qty, movement_type, reason):
         with self.conn:
             self.conn.execute(
                 "UPDATE products SET quantity = ? WHERE id = ?",
                 (new_qty, product_id),
             )
+        self.stock_repo.insert_movement(product_id, quantity, movement_type, reason)
+
 
     def update_cost(self, product_id, new_cost):
         with self.conn:

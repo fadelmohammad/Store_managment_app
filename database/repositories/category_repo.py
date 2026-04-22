@@ -1,31 +1,36 @@
 # category_repo.py
 
-	def get_path(self, cat_id):
-	    """Returns 'Electrical > Lights > Bulbs' for a given category ID."""
-	    query = """
-	        WITH RECURSIVE category_path(id, name, parent_id, path) AS (
-	            SELECT id, name, parent_id, name FROM categories WHERE parent_id IS NULL
-	            UNION ALL
-	            SELECT c.id, c.name, c.parent_id, cp.path || ' > ' || c.name
-	            FROM categories c JOIN category_path cp ON c.parent_id = cp.id
-	        )
-	        SELECT path FROM category_path WHERE id = ?;
-	    """
-	    row = self.cursor.execute(query, (cat_id,)).fetchone()
-	    return row["path"] if row else "Uncategorized"
+
+class CategoryRepository:
+    def __init__(self, conn):
+        self.conn = conn
+
+    def get_path(self, cat_id):
+        """Returns 'Electrical > Lights > Bulbs' for a given category ID."""
+        query = """
+            WITH RECURSIVE category_path(id, name, parent_id, path) AS (
+                SELECT id, name, parent_id, name FROM categories WHERE parent_id IS NULL
+                UNION ALL
+                SELECT c.id, c.name, c.parent_id, cp.path || ' > ' || c.name
+                FROM categories c JOIN category_path cp ON c.parent_id = cp.id
+            )
+            SELECT path FROM category_path WHERE id = ?;
+        """
+        row = self.conn.execute(query, (cat_id,)).fetchone()
+        return row["path"] if row else "Uncategorized"
 
     def get_all_flat(self):
-    """Returns all categories with their full breadcrumb paths for dropdowns."""
-    query = """
-        WITH RECURSIVE category_path(id, name, parent_id, path) AS (
-            SELECT id, name, parent_id, name FROM categories WHERE parent_id IS NULL
-            UNION ALL
-            SELECT c.id, c.name, c.parent_id, cp.path || ' > ' || c.name
-            FROM categories c JOIN category_path cp ON c.parent_id = cp.id
-        )
-        SELECT id, path FROM category_path ORDER BY path;
-    """
-    return self.cursor.execute(query).fetchall()
+        """Returns all categories with their full breadcrumb paths for dropdowns."""
+        query = """
+            WITH RECURSIVE category_path(id, name, parent_id, path) AS (
+                SELECT id, name, parent_id, name FROM categories WHERE parent_id IS NULL
+                UNION ALL
+                SELECT c.id, c.name, c.parent_id, cp.path || ' > ' || c.name
+                FROM categories c JOIN category_path cp ON c.parent_id = cp.id
+            )
+            SELECT id, path FROM category_path ORDER BY path;
+        """
+        return self.conn.execute(query).fetchall()
 
     def add(self, name, parent_id=None):
         with self.conn:
@@ -77,4 +82,4 @@
         """
         # Note: Depending on your schema, you might need to adjust the WHERE
         # to match how you store/identify categories.
-        return self.cursor.execute(query, (category_path.split(" > ")[-1],)).fetchall()
+        return self.conn.execute(query, (category_path.split(" > ")[-1],)).fetchall()
