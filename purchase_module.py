@@ -86,7 +86,7 @@ class PurchaseFrame(ctk.CTkFrame):
 
     def refresh_data(self):
         # Update Suppliers
-        suppliers = self.db.get_partners_by_role("Supplier")
+        suppliers = self.app.account_repo.get_by_role("Supplier")
         self.supplier_map = {s["name"]: s["id"] for s in suppliers}
 
         # Update the dropdown values

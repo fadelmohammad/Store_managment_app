@@ -7,6 +7,7 @@ from database.repositories.product_repo import ProductRepository
 from database.repositories.stock_movement_repo import StockMovementRepository
 from database.repositories.category_repo import CategoryRepository
 from database.repositories.settings_repo import SettingRepository
+from database.repositories.account_repo import AccountRepository
 from services.inventory_service import InventoryService
 from database.core import Database
 from services.ledger_service import LedgerService
@@ -36,6 +37,7 @@ class StoreApp(ctk.CTk):
         self.inventory_service = InventoryService(self.product_repo, self.stock_repo)
         self.category_repo = CategoryRepository(self.conn)
         self.setting_repo = SettingRepository(self.conn)
+        self.account_repo = AccountRepository(self.conn)
 
         create_tables(self.conn)
         seed_ledger_accounts(self.conn)

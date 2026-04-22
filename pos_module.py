@@ -222,7 +222,7 @@ class POSFrame(ctk.CTkFrame):
         self.cust_results_list.pack_forget()
 
     def load_customers(self):
-        all_customers = self.db.get_partners_by_role("Customer")
+        all_customers = self.app.account_repo.get_by_role("Customer")
         self.customer_map = {c["name"]: c["id"] for c in all_customers}
         
         default_name = "Cash Customer"
