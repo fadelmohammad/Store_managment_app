@@ -5,7 +5,7 @@ from tkinter import ttk, messagebox, Menu
 
 
 class InventoryFrame(ctk.CTkFrame):
-    def __init__(self, parent, app, db):
+    def __init__(self, parent, app):
         super().__init__(parent)
         self.app = app
         self.selected_product_id = None
@@ -282,7 +282,7 @@ class InventoryFrame(ctk.CTkFrame):
         if not sel:
             return
         self.selected_product_id = sel[0]
-        p = self.app.product_repo.get_by_id(self.selected_product_id)
+        p = self.app.inventory_service.get_product_by_id(self.selected_product_id)
         if p:
             self.clear_form(keep_id=True)
             self.name_entry.insert(0, p["name"])
@@ -315,7 +315,7 @@ class InventoryFrame(ctk.CTkFrame):
     def add_product(self):
         try:
             data = self.get_form_data()
-            self.app.product_repo.add(*data)
+            self.app.inventory_service.add_product(*data)
             self.refresh_data()
             self.clear_form()
             messagebox.showinfo("Success", "Product added.")
@@ -325,9 +325,10 @@ class InventoryFrame(ctk.CTkFrame):
     def update_product(self):
         if not self.selected_product_id:
             return
+            
         try:
             data = self.get_form_data()
-            self.app.product_repo.update(self.selected_product_id, *data)
+            self.app.inventory_service.update_product(self.selected_product_id, *data)
             self.refresh_data()
             messagebox.showinfo("Success", "Product updated.")
         except Exception as e:
@@ -336,6 +337,7 @@ class InventoryFrame(ctk.CTkFrame):
     def delete_product(self):
         if not self.selected_product_id:
             return
+
         if messagebox.askyesno("Confirm", "Delete this product?"):
             self.app.product_repo.delete(self.selected_product_id)
             self.refresh_data()
@@ -440,9 +442,9 @@ class InventoryFrame(ctk.CTkFrame):
     def open_history_popup(self, mode, target_id, title_name):
         is_prod = mode == "PRODUCT"
         history_data = (
-            self.app.product_repo.get_history(target_id)
+            self.app.inventory_service.get_product_history(target_id)
             if is_prod
-            else self.app.category_repo.get_history(target_id)
+            else self.app.inventory_service.get_category_history(target_id)
         )
 
         win = ctk.CTkToplevel(self)

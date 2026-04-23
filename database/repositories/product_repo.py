@@ -38,20 +38,18 @@ class ProductRepository:
                 (name, category_id, price, min_threshold, product_id),
             )
         self.update_cost(product_id, cost)
-        self.update_quantity(product_id, quantity, movement_type, reason)
+        self.update_quantity(product_id, quantity)
 
     def delete(self, product_id):
         with self.conn:
             self.conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
 
-    def update_quantity(self, product_id, new_qty, movement_type, reason):
+    def update_quantity(self, product_id, new_qty):
         with self.conn:
             self.conn.execute(
                 "UPDATE products SET quantity = ? WHERE id = ?",
                 (new_qty, product_id),
             )
-        self.stock_repo.insert_movement(product_id, quantity, movement_type, reason)
-
 
     def update_cost(self, product_id, new_cost):
         with self.conn:

@@ -2,22 +2,35 @@
 
 
 class InventoryService:
-    def __init__(self, product_repo, stock_repo):
+    def __init__(self, product_repo, stock_repo, category_repo):
         self.product_repo = product_repo
         self.stock_repo = stock_repo
+        self.category_repo = category_repo
 
         if product_repo.conn is not stock_repo.conn:
             raise ValueError("Repositories must share the same DB connection")
 
     def get_products(self):
+        """Fetches all products"""
         return self.product_repo.get_all()
+
+    def get_product_by_id(self, product_id):
+        """Fetches a specific product based on its ID"""
+        return self.product_repo.get_by_id(product_id)
 
     def add_product(self, name, category_id, price, cost, quantity, threshold):
         # basic validation (expand later)
         if quantity < 0:
             raise ValueError("Quantity cannot be negative")
 
+        movement_type = "IN"
+        reason = "initial"
+
         self.product_repo.add(name, category_id, price, cost, quantity, threshold)
+        self.stock_repo.insert_movement(product_id, movement_type, quantity, reason)
+
+    def update_product(self, product_id, name, category_id, price, cost, quantity, min_threshold):
+        self.product_repo.update(product_id, name, category_id, price, cost, quantity, min_threshold)
 
     def update_stock_with_log(self, product_id, change, m_type, reason):
         product = self.product_repo.get_by_id(product_id)
@@ -51,6 +64,14 @@ class InventoryService:
             new_cost = total_value / total_qty
 
         self.product_repo.update_cost(product_id, round(new_cost, 2))
+
+    def get_product_history(self, product_id):
+        """Fetches the stock movement timeline for a specific product."""
+        self.product_repo.get_history(product_id)
+
+    def get_category_history(self, category_path):
+        """Fetches history for all products under a specific category path."""
+        self.category_repo.get_history(category_path):
 
     def bulk_update_prices(self, percentage):
         multiplier = 1.0 + (percentage / 100.0)

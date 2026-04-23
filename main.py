@@ -9,6 +9,7 @@ from database.repositories.category_repo import CategoryRepository
 from database.repositories.settings_repo import SettingRepository
 from database.repositories.account_repo import AccountRepository
 from services.inventory_service import InventoryService
+from services.report_service import ReportingService
 from database.core import Database
 from services.ledger_service import LedgerService
 from services.sales_service import SalesService
@@ -34,16 +35,16 @@ class StoreApp(ctk.CTk):
 
         self.stock_repo = StockMovementRepository(self.conn)
         self.product_repo = ProductRepository(self.conn, self.stock_repo)
-        self.inventory_service = InventoryService(self.product_repo, self.stock_repo)
         self.category_repo = CategoryRepository(self.conn)
+        self.inventory_service = InventoryService(self.product_repo, self.stock_repo, self.category_repo)
+
         self.setting_repo = SettingRepository(self.conn)
         self.account_repo = AccountRepository(self.conn)
+        self.report_service = ReportingService(self.conn)
 
         create_tables(self.conn)
         seed_ledger_accounts(self.conn)
         insert_dummy_data(self.conn)
-
-        self.db = Database(self.conn)
 
         # --- THEME & WINDOW CONFIG ---
         ctk.set_appearance_mode("dark")
@@ -54,9 +55,9 @@ class StoreApp(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
         # Service Layer (Business Logic)
-        self.ledger_service = LedgerService(self.db)
-        self.sales_service = SalesService(self.db, self.ledger_service)
-        self.purchase_service = PurchaseService(self.db, self.ledger_service)
+        # self.ledger_service = LedgerService(self.db)
+        # self.sales_service = SalesService(self.db, self.ledger_service)
+        # self.purchase_service = PurchaseService(self.db, self.ledger_service)
 
         # Load the rate from DB, fallback to 15000 if not found
         saved_rate = self.setting_repo.get("exchange_rate", "15000")
@@ -84,7 +85,7 @@ class StoreApp(ctk.CTk):
         """Initializes and registers all UI modules."""
         self.frames = {
             "dashboard": DashboardFrame(self.container, self),
-            "inventory": InventoryFrame(self.container, self, self.db),
+            "inventory": InventoryFrame(self.container, self),
             "pos": POSFrame(self.container, self, self.db, self.sales_service),
             "accounts": AccountsFrame(self.container, self, self.db),
             "cashbox": CashboxFrame(self.container, self, self.db, self.ledger_service),
@@ -141,7 +142,7 @@ class StoreApp(ctk.CTk):
     def on_close(self):
         """Ensures the database connection is closed gracefully."""
         try:
-            self.db.close()
+            self.db_connection.close()
         except Exception as e:
             print(f"Cleanup Error: {e}")
         self.destroy()
