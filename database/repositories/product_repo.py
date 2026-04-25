@@ -2,7 +2,7 @@
 
 
 class ProductRepository:
-    def __init__(self, conn, stock_repo):
+    def __init__(self, conn):
         self.conn = conn
 
     def get_all(self):
@@ -31,7 +31,7 @@ class ProductRepository:
                 (name, category_id, price, cost, quantity, min_threshold),
             )
 
-    def update(self, product_id, name, category_id, price, cost, quantity, min_threshold, movement_type, reason):
+    def update(self, product_id, name, category_id, price, cost, quantity, min_threshold):
         with self.conn:
             self.conn.execute(
                 "UPDATE products SET name=?, category_id=?, price=?, min_threshold=? WHERE id=?",

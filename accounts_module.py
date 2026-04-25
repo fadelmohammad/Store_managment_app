@@ -5,10 +5,9 @@ from tkinter import ttk, messagebox
 
 
 class AccountsFrame(ctk.CTkFrame):
-    def __init__(self, parent, app, db):
+    def __init__(self, parent, app):
         super().__init__(parent)
         self.app = app
-        self.db = db
         self.selected_account_id = None
 
         # --- NAVIGATION BAR ---

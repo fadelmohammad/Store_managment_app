@@ -7,8 +7,10 @@ class InventoryService:
         self.stock_repo = stock_repo
         self.category_repo = category_repo
 
-        if product_repo.conn is not stock_repo.conn:
+        if product_repo.conn is not stock_repo.conn is not category_repo.conn:
             raise ValueError("Repositories must share the same DB connection")
+
+    # --- Procducts Service ---
 
     def get_products(self):
         """Fetches all products"""
@@ -19,6 +21,7 @@ class InventoryService:
         return self.product_repo.get_by_id(product_id)
 
     def add_product(self, name, category_id, price, cost, quantity, threshold):
+        """add a new product"""
         # basic validation (expand later)
         if quantity < 0:
             raise ValueError("Quantity cannot be negative")
@@ -30,7 +33,12 @@ class InventoryService:
         self.stock_repo.insert_movement(product_id, movement_type, quantity, reason)
 
     def update_product(self, product_id, name, category_id, price, cost, quantity, min_threshold):
+        """update a specific product"""
         self.product_repo.update(product_id, name, category_id, price, cost, quantity, min_threshold)
+
+    def delete_product(self, product_id):
+        """delete a specific product"""
+        self.product_repo.delete(product_id)
 
     def update_stock_with_log(self, product_id, change, m_type, reason):
         product = self.product_repo.get_by_id(product_id)
@@ -65,14 +73,33 @@ class InventoryService:
 
         self.product_repo.update_cost(product_id, round(new_cost, 2))
 
+    def bulk_update_prices(self, percentage):
+        """updating products prices using percentage"""
+        multiplier = 1.0 + (percentage / 100.0)
+        self.product_repo.bulk_update_prices(multiplier)
+
     def get_product_history(self, product_id):
         """Fetches the stock movement timeline for a specific product."""
-        self.product_repo.get_history(product_id)
+        return self.product_repo.get_history(product_id)
+
+    # --- Category Service ---
+
+    def get_categories(self):
+        """fetches all categories"""
+        return self.category_repo.get_all_flat()
+
+    def get_category_path(self, category_id):
+        """return path for a specific category"""
+        return self.category_repo.get_path(category_id)
+
+    def add_category(self, name, parent_id):
+        """add a new category"""
+        self.category_repo.add(name, parent_id)
+
+    def delete_category(self, category_id):
+        """delete an existing category"""
+        self.category_repo.delete(category_id)
 
     def get_category_history(self, category_path):
         """Fetches history for all products under a specific category path."""
-        self.category_repo.get_history(category_path):
-
-    def bulk_update_prices(self, percentage):
-        multiplier = 1.0 + (percentage / 100.0)
-        self.product_repo.bulk_update_prices(multiplier)
+        return self.category_repo.get_history(category_path):
