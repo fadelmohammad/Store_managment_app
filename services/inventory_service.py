@@ -7,7 +7,7 @@ class InventoryService:
         self.stock_repo = stock_repo
         self.category_repo = category_repo
 
-        if product_repo.conn is not stock_repo.conn is not category_repo.conn:
+        if not (product_repo.conn is stock_repo.conn and stock_repo.conn is category_repo.conn):
             raise ValueError("Repositories must share the same DB connection")
 
     # --- Procducts Service ---
@@ -20,17 +20,14 @@ class InventoryService:
         """Fetches a specific product based on its ID"""
         return self.product_repo.get_by_id(product_id)
 
-    def add_product(self, name, category_id, price, cost, quantity, threshold):
+    def add_product(self, name, product_id, category_id, price, cost, quantity, threshold):
         """add a new product"""
         # basic validation (expand later)
         if quantity < 0:
             raise ValueError("Quantity cannot be negative")
 
-        movement_type = "IN"
-        reason = "initial"
-
         self.product_repo.add(name, category_id, price, cost, quantity, threshold)
-        self.stock_repo.insert_movement(product_id, movement_type, quantity, reason)
+        self.stock_repo.insert_movement(product_id, "IN", quantity, "Initial")
 
     def update_product(self, product_id, name, category_id, price, cost, quantity, min_threshold):
         """update a specific product"""
@@ -80,7 +77,7 @@ class InventoryService:
 
     def get_product_history(self, product_id):
         """Fetches the stock movement timeline for a specific product."""
-        return self.product_repo.get_history(product_id)
+        return self.stock_repo.get_movements(product_id)
 
     # --- Category Service ---
 
@@ -102,4 +99,4 @@ class InventoryService:
 
     def get_category_history(self, category_path):
         """Fetches history for all products under a specific category path."""
-        return self.category_repo.get_history(category_path):
+        return self.category_repo.get_history(category_path)

@@ -12,3 +12,13 @@ class StockMovementRepository:
                 VALUES (?, ?, ?, datetime('now'), ?)""",
                 (product_id, movement_type, quantity, reason),
             )
+	def get_movements(self, product_id):
+        return self.conn.execute(
+            """
+            SELECT date, movement_type, quantity, reason 
+            FROM stock_movements 
+            WHERE product_id = ? 
+            ORDER BY date DESC
+        """,
+            (product_id,),
+        ).fetchall()

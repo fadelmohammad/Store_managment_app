@@ -34,7 +34,7 @@ class StoreApp(ctk.CTk):
         self.conn = self.db_connection.get_connection()
 
         self.stock_repo = StockMovementRepository(self.conn)
-        self.product_repo = ProductRepository(self.conn, self.stock_repo)
+        self.product_repo = ProductRepository(self.conn)
         self.category_repo = CategoryRepository(self.conn)
         self.inventory_service = InventoryService(self.product_repo, self.stock_repo, self.category_repo)
 

@@ -34,11 +34,9 @@ class ProductRepository:
     def update(self, product_id, name, category_id, price, cost, quantity, min_threshold):
         with self.conn:
             self.conn.execute(
-                "UPDATE products SET name=?, category_id=?, price=?, min_threshold=? WHERE id=?",
-                (name, category_id, price, min_threshold, product_id),
+                """UPDATE products SET name=?, category_id=?, price=?, cost=?, quantity=?, min_threshold=? WHERE id=?""",
+                (name, category_id, price, cost, quantity, min_threshold, product_id),
             )
-        self.update_cost(product_id, cost)
-        self.update_quantity(product_id, quantity)
 
     def delete(self, product_id):
         with self.conn:
@@ -63,15 +61,3 @@ class ProductRepository:
             self.conn.execute(
                 "UPDATE products SET price = ROUND(price * ?, 2)", (multiplier,)
             )
-
-    def get_history(self, product_id):
-        """Fetches the stock movement timeline for a specific product."""
-        return self.conn.execute(
-            """
-            SELECT date, movement_type, quantity, reason 
-            FROM stock_movements 
-            WHERE product_id = ? 
-            ORDER BY date DESC
-        """,
-            (product_id,),
-        ).fetchall()
