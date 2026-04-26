@@ -20,13 +20,16 @@ class InventoryService:
         """Fetches a specific product based on its ID"""
         return self.product_repo.get_by_id(product_id)
 
-    def add_product(self, name, product_id, category_id, price, cost, quantity, threshold):
+    def add_product(self, name,category_id, price, cost, quantity, threshold):
         """add a new product"""
         # basic validation (expand later)
         if quantity < 0:
             raise ValueError("Quantity cannot be negative")
 
-        self.product_repo.add(name, category_id, price, cost, quantity, threshold)
+        # Add product and capture returned ID
+        cursor = self.product_repo.add(name, category_id, price, cost, quantity, threshold)
+        product_id = cursor.lastrowid  # Get the auto-generated ID
+        
         self.stock_repo.insert_movement(product_id, "IN", quantity, "Initial")
 
     def update_product(self, product_id, name, category_id, price, cost, quantity, min_threshold):

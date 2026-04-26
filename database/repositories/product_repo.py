@@ -24,12 +24,13 @@ class ProductRepository:
 
     def add(self, name, category_id, price, cost, quantity, min_threshold):
         with self.conn:
-            self.conn.execute(
+            cursor = self.conn.execute(
                 """INSERT INTO products 
                 (name, category_id, price, cost, quantity, min_threshold)
                 VALUES (?, ?, ?, ?, ?, ?)""",
                 (name, category_id, price, cost, quantity, min_threshold),
             )
+            return cursor
 
     def update(self, product_id, name, category_id, price, cost, quantity, min_threshold):
         with self.conn:
