@@ -175,34 +175,54 @@ class AccountsFrame(ctk.CTkFrame):
             messagebox.showerror("Error", str(e))
 
     def update_account(self):
+        # 1. UI State Validation
         if not self.selected_account_id:
             messagebox.showwarning("Select", "Please select an account from the list first.")
             return
 
+        # 2. Data Gathering
+        account_data = {
+            "name": self.name_entry.get(),
+            "role": self.role_var.get(),
+            "phone": self.phone_entry.get(),
+            "email": self.email_entry.get(),
+            "address": self.address_entry.get()
+        }
+
+        # 3. Execution via Service
         try:
-            self.db.cursor.execute(
-                """UPDATE accounts SET name=?, role=?, phone=?, email=?, address=? WHERE id=?""",
-                (self.name_entry.get(), self.role_var.get(), self.phone_entry.get(),
-                 self.email_entry.get(), self.address_entry.get(), self.selected_account_id)
-            )
-            self.db.conn.commit()
+            self.account_service.update_account(self.selected_account_id, account_data)
+            
+            # 4. Success Feedback & UI Refresh
             self.refresh_list()
-            messagebox.showinfo("Success", "Account updated.")
+            messagebox.showinfo("Success", "Account updated successfully.")
+            
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            # 5. Error Feedback
+            messagebox.showerror("Error", f"Failed to update account: {str(e)}")
 
     def delete_account(self):
-        if not self.selected_account_id: return
-
-        # Safety Check: Don't delete accounts with money owed/owing
-        acc = self.db.cursor.execute("SELECT balance FROM accounts WHERE id = ?",
-                                     (self.selected_account_id,)).fetchone()
-        if acc and abs(acc["balance"]) > 0.01:
-            messagebox.showerror("Blocked", "Cannot delete account with a non-zero balance. Settle the balance first.")
+        # 1. UI State Validation
+        if not self.selected_account_id:
+            messagebox.showwarning("Select", "Please select an account from the list first.")
             return
 
-        if messagebox.askyesno("Confirm", "Are you sure you want to delete this partner?"):
-            self.db.cursor.execute("DELETE FROM accounts WHERE id = ?", (self.selected_account_id,))
-            self.db.conn.commit()
+        # 2. UI Confirmation
+        if not messagebox.askyesno("Confirm", "Are you sure you want to delete this partner?"):
+            return
+
+        # 3. Execution via Service
+        try:
+            self.account_service.delete_account(self.selected_account_id)
+            
+            # 4. Success Feedback & Cleanup
             self.refresh_list()
             self.clear_form()
+            messagebox.showinfo("Success", "Account deleted successfully.")
+            
+        except PermissionError as e:
+            # Specific catch for our business rule violation
+            messagebox.showerror("Blocked", str(e))
+        except Exception as e:
+            # General catch for database or unexpected errors
+            messagebox.showerror("Error", f"Failed to delete account: {str(e)}")
