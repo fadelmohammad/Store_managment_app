@@ -97,7 +97,6 @@ class AccountsFrame(ctk.CTkFrame):
     # LOGIC
     # ==========================================
     def refresh_list(self):
-        """Fetches accounts based on search and role filters."""
         for i in self.tree.get_children():
             self.tree.delete(i)
 
@@ -106,40 +105,31 @@ class AccountsFrame(ctk.CTkFrame):
         search = self.search_var.get().lower()
         role = self.role_filter.get()
 
-        query = "SELECT id, name, role, phone, balance FROM accounts WHERE 1=1"
-        params = []
+        rows = self.account_service.get_accounts(search, role)
 
-        if role != "All":
-            query += " AND role = ?"
-            params.append(role)
-
-        if search:
-            query += " AND (name LIKE ? OR phone LIKE ?)"
-            params.extend([f"%{search}%", f"%{search}%"])
-
-        rows = self.db.cursor.execute(query, params).fetchall()
         for r in rows:
             usd_bal = r["balance"]
-            syp_bal = usd_bal * rate # Live conversion
-            
+            syp_bal = usd_bal * rate
+
             self.tree.insert("", "end", iid=str(r["id"]), values=(
-                r["id"], 
-                r["name"], 
-                r["role"], 
-                r["phone"], 
-                f"${usd_bal:,.2f}",      # USD Column
-                f"{syp_bal:,.0f} SYP"    # NEW SYP Column
+                r["id"],
+                r["name"],
+                r["role"],
+                r["phone"],
+                f"${usd_bal:,.2f}",
+                f"{syp_bal:,.0f} SYP"
             ))
 
     def on_account_select(self, event):
         sel = self.tree.selection()
-        if not sel: return
+        if not sel:
+            return
 
         self.selected_account_id = sel[0]
-        acc = self.db.cursor.execute("SELECT * FROM accounts WHERE id = ?", (self.selected_account_id,)).fetchone()
+
+        acc = self.account_service.get_account_by_id(self.selected_account_id)
 
         if acc:
-            # THIS IS THE VITAL FIX: Pass keep_id=True
             self.clear_form(keep_id=True)
 
             self.name_entry.insert(0, acc["name"])
@@ -147,7 +137,9 @@ class AccountsFrame(ctk.CTkFrame):
             self.phone_entry.insert(0, acc["phone"] or "")
             self.email_entry.insert(0, acc["email"] or "")
             self.address_entry.insert(0, acc["address"] or "")
-            self.balance_lbl.configure(text=f"Current Balance: €{acc['balance']:,.2f}")
+            self.balance_lbl.configure(
+                text=f"Current Balance: €{acc['balance']:,.2f}"
+            )
 
     def clear_form(self, keep_id=False):
         if not keep_id:
@@ -158,29 +150,31 @@ class AccountsFrame(ctk.CTkFrame):
 
     def save_account(self):
         name = self.name_entry.get().strip()
-        if not name:
-            messagebox.showwarning("Required", "Name is required.")
-            return
 
         try:
-            self.db.cursor.execute(
-                "INSERT INTO accounts (name, role, phone, email, address, balance) VALUES (?, ?, ?, ?, ?, 0)",
-                (name, self.role_var.get(), self.phone_entry.get(), self.email_entry.get(), self.address_entry.get())
+            self.account_service.create_account(
+                name=name,
+                role=self.role_var.get(),
+                phone=self.phone_entry.get(),
+                email=self.email_entry.get(),
+                address=self.address_entry.get()
             )
-            self.db.conn.commit()
+
             self.refresh_list()
             self.clear_form()
             messagebox.showinfo("Success", "Account created successfully.")
+
+        except ValueError as e:
+            messagebox.showwarning("Validation Error", str(e))
+
         except Exception as e:
             messagebox.showerror("Error", str(e))
 
     def update_account(self):
-        # 1. UI State Validation
         if not self.selected_account_id:
             messagebox.showwarning("Select", "Please select an account from the list first.")
             return
 
-        # 2. Data Gathering
         account_data = {
             "name": self.name_entry.get(),
             "role": self.role_var.get(),
@@ -189,16 +183,16 @@ class AccountsFrame(ctk.CTkFrame):
             "address": self.address_entry.get()
         }
 
-        # 3. Execution via Service
         try:
             self.account_service.update_account(self.selected_account_id, account_data)
-            
-            # 4. Success Feedback & UI Refresh
+
             self.refresh_list()
             messagebox.showinfo("Success", "Account updated successfully.")
-            
+
+        except ValueError as e:
+            messagebox.showwarning("Validation Error", str(e))
+
         except Exception as e:
-            # 5. Error Feedback
             messagebox.showerror("Error", f"Failed to update account: {str(e)}")
 
     def delete_account(self):

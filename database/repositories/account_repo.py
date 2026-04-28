@@ -1,31 +1,38 @@
 # account_repo.py
 
-class AccountRepository(BaseRepository):
+class AccountRepository:
     def __init__(self, conn):
         self.conn = conn
 
     def get_by_id(self, account_id):
         """Fetches account details by ID."""
         query = "SELECT * FROM accounts WHERE id = ?"
-        cursor = self._execute(query, (account_id,))
+        cursor = self.conn.execute(query, (account_id,))
         return cursor.fetchone()
 
-    def get_by_role(self, role):
-        """Fetches account details by ROLE."""
-        query = "SELECT * FROM accounts WHERE role = ? ORDER BY name"
+    def fetch_accounts(self, search=None, role=None):
+        query = "SELECT id, name, role, phone, balance FROM accounts WHERE 1=1"
+        params = []
 
-        cursor = self._execute(query, (role,))
+        if role and role != "All":
+            query += " AND role = ?"
+            params.append(role)
 
-        return cursor.fetchall
+        if search:
+            query += " AND (name LIKE ? OR phone LIKE ?)"
+            params.extend([f"%{search}%", f"%{search}%"])
 
-    def add(self, name, role, phone, email, address):
-        cursor = self._execute(
-            """
-            INSERT INTO accounts (name, role, phone, email, address)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (name, role, phone, email, address),
-        )
+        return self.conn.execute(query, params).fetchall()
+
+    def add(self, name, role, phone, email, address, balance):
+
+        query = """
+            INSERT INTO accounts (name, role, phone, email, address, balance)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """
+        params = (name, role, phone, email, address, balance)
+
+        cursor = self.conn.execute(query, params)
         return cursor.lastrowid
 
     def update(self, account_id, data):
@@ -40,10 +47,10 @@ class AccountRepository(BaseRepository):
             data['email'], data['address'], account_id
         )
         
-        self._execute(query, params)
+        self.conn.execute(query, params)
 
     def delete(self, account_id):
         """Removes the account record from the database."""
         query = "DELETE FROM accounts WHERE id = ?"
-        self._execute(query, (account_id,))
+        self.conn.execute(query, (account_id,))
 
