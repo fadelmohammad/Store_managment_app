@@ -130,8 +130,7 @@ class InventoryFrame(ctk.CTkFrame):
             command=self.show_stock_history,
         ).pack(fill="x", pady=(5, 20))
 
-        # --- NEW: BULK OPERATIONS SECTION ---
-        # Separator Label
+
         ctk.CTkLabel(
             right_panel,
             text="Bulk Price Adjustments",
@@ -139,17 +138,17 @@ class InventoryFrame(ctk.CTkFrame):
             text_color="#f1c40f",
         ).pack(pady=(25, 5))
 
-        # Percentage Entry
+
         self.bulk_pct_entry = ctk.CTkEntry(
             right_panel, placeholder_text="Enter % (e.g. 10)"
         )
         self.bulk_pct_entry.pack(fill="x", padx=25, pady=5)
 
-        # Container for the two side-by-side buttons
+
         bulk_btn_frame = ctk.CTkFrame(right_panel, fg_color="transparent")
         bulk_btn_frame.pack(fill="x", padx=20, pady=5)
 
-        # Increase Button
+
         ctk.CTkButton(
             bulk_btn_frame,
             text="Increase All",
@@ -159,7 +158,7 @@ class InventoryFrame(ctk.CTkFrame):
             command=lambda: self.apply_bulk_adjustment("UP"),
         ).pack(side="left", padx=5, expand=True)
 
-        # Decrease Button
+
         ctk.CTkButton(
             bulk_btn_frame,
             text="Decrease All",
@@ -187,54 +186,13 @@ class InventoryFrame(ctk.CTkFrame):
         return entry
 
     def open_category_window(self):
-        """Popup to add a new sub-category."""
-        pop = ctk.CTkToplevel(self)
-        pop.title("Add Category")
-        pop.geometry("300x250")
-        pop.attributes("-topmost", True)
-
-        ctk.CTkLabel(pop, text="Category Name:").pack(pady=5)
-        name_ent = ctk.CTkEntry(pop)
-        name_ent.pack(pady=5)
-
-        ctk.CTkLabel(pop, text="Parent Category (Optional):").pack(pady=5)
-        parent_var = ctk.StringVar(value="None")
-        parent_opts = ["None"] + list(self.cat_map.keys())
-        ctk.CTkOptionMenu(pop, variable=parent_var, values=parent_opts).pack(pady=5)
-
-        def save():
-            p_id = self.cat_map.get(parent_var.get())  # None if "None"
-            self.app.inventory_service.add_category(name_ent.get(), p_id)
-            self.refresh_category_list()
-            pop.destroy()
-
-        ctk.CTkButton(pop, text="Save", command=save).pack(pady=20)
-
-        def delete_selected_cat():
-            # Get the ID of the category currently selected in the 'parent' dropdown
-            # or add a separate selection for deletion.
-            target_path = parent_var.get()
-            cat_id = self.cat_map.get(target_path)
-
-            if not cat_id:
-                messagebox.showwarning("Error", "Select a valid category to delete.")
-                return
-
-            if messagebox.askyesno(
-                "Confirm",
-                f"Delete '{target_path}'?\nProducts will move to the parent level.",
-            ):
-                self.app.inventory_service.delete_category(cat_id)
-                self.refresh_category_list()
-                # Update the popup dropdown values too
-                parent_opts = ["None"] + list(self.cat_map.keys())
-                # (You'd need to re-configure the popup menu here or just close it)
-                pop.destroy()
-                self.refresh_data()  # Refresh main inventory table
-
-        ctk.CTkButton(
-            pop, text="Delete Selected", fg_color="#e74c3c", command=delete_selected_cat
-        ).pack(pady=5)
+        from category_module import CategoryManagementWindow
+        
+        CategoryManagementWindow(
+            parent=self,
+            inventory_service=self.app.inventory_service,  
+            refresh_callback=self.refresh_category_list
+        )
 
     def refresh_data(self):
         for i in self.tree.get_children():
@@ -270,12 +228,36 @@ class InventoryFrame(ctk.CTkFrame):
                     tags=tags,
                 )
 
+
     def refresh_category_list(self):
-        """Updates the dropdown with the latest Electrical > Lights > Bulbs paths."""
-        cats = self.app.inventory_service.get_categories()
-        self.cat_map = {c["path"]: c["id"] for c in cats}
-        paths = list(self.cat_map.keys())
-        self.cat_dropdown.configure(values=paths if paths else ["No Categories"])
+        """Updates the dropdown with the latest category paths."""
+        try:
+            print(" Refreshing category list...")
+            cats = self.app.inventory_service.get_categories()
+            print(f" Received {len(cats)} categories from service")
+            
+            if not cats:
+                print(" No categories found! Check database.")
+                self.cat_map = {}
+                self.cat_dropdown.configure(values=["No Categories"])
+                return
+            
+            self.cat_map = {}
+            for c in cats:
+                path = c.get("path", c.get("name", "بدون اسم"))
+                cat_id = c.get("id")
+                self.cat_map[path] = cat_id
+                print(f"  - Mapped: {path} -> ID: {cat_id}")
+            
+            paths = list(self.cat_map.keys())
+            print(f" Dropdown values: {paths}")
+            self.cat_dropdown.configure(values=paths if paths else ["No Categories"])
+            
+        except Exception as e:
+            print(f" Error in refresh_category_list: {e}")
+            import traceback
+            traceback.print_exc()
+            self.cat_dropdown.configure(values=["Error loading categories"])
 
     def on_product_select(self, event):
         sel = self.tree.selection()
