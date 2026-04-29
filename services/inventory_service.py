@@ -1,0 +1,105 @@
+# inventory_service.py
+
+
+class InventoryService:
+    def __init__(self, product_repo, stock_repo, category_repo):
+        self.product_repo = product_repo
+        self.stock_repo = stock_repo
+        self.category_repo = category_repo
+
+        if not (product_repo.conn is stock_repo.conn and stock_repo.conn is category_repo.conn):
+            raise ValueError("Repositories must share the same DB connection")
+
+    # --- Procducts Service ---
+
+    def get_products(self):
+        """Fetches all products"""
+        return self.product_repo.get_all()
+
+    def get_product_by_id(self, product_id):
+        """Fetches a specific product based on its ID"""
+        return self.product_repo.get_by_id(product_id)
+
+    def add_product(self, name,category_id, price, cost, quantity, threshold):
+        """add a new product"""
+        # basic validation (expand later)
+        if quantity < 0:
+            raise ValueError("Quantity cannot be negative")
+
+        # Add product and capture returned ID
+        cursor = self.product_repo.add(name, category_id, price, cost, quantity, threshold)
+        product_id = cursor.lastrowid  # Get the auto-generated ID
+        
+        self.stock_repo.insert_movement(product_id, "IN", quantity, "Initial")
+
+    def update_product(self, product_id, name, category_id, price, cost, quantity, min_threshold):
+        """update a specific product"""
+        self.product_repo.update(product_id, name, category_id, price, cost, quantity, min_threshold)
+
+    def delete_product(self, product_id):
+        """delete a specific product"""
+        self.product_repo.delete(product_id)
+
+    def update_stock_with_log(self, product_id, change, m_type, reason):
+        product = self.product_repo.get_by_id(product_id)
+
+        if not product:
+            raise ValueError("Product not found")
+
+        new_qty = product["quantity"] + change
+
+        if new_qty < 0:
+            raise ValueError("Insufficient stock")
+
+        # atomicity handled via connection shared across repos
+        self.product_repo.update_quantity(product_id, new_qty)
+        self.stock_repo.insert_movement(product_id, m_type, change, reason)
+
+    def update_weighted_average_cost(self, product_id, new_qty, purchase_price):
+        product = self.product_repo.get_by_id(product_id)
+        if not product:
+            raise ValueError("product not found")
+
+        old_qty = product["quantity"]
+        old_cost = product["cost"]
+
+        total_qty = old_qty + new_qty
+
+        if total_qty <= 0:
+            new_cost = purchase_price
+        else:
+            total_value = (old_qty * old_cost) + (new_qty * purchase_price)
+            new_cost = total_value / total_qty
+
+        self.product_repo.update_cost(product_id, round(new_cost, 2))
+
+    def bulk_update_prices(self, percentage):
+        """updating products prices using percentage"""
+        multiplier = 1.0 + (percentage / 100.0)
+        self.product_repo.bulk_update_prices(multiplier)
+
+    def get_product_history(self, product_id):
+        """Fetches the stock movement timeline for a specific product."""
+        return self.stock_repo.get_movements(product_id)
+
+    # --- Category Service ---
+
+    def get_categories(self):
+        """fetches all categories"""
+        return self.category_repo.get_all_flat()
+
+    def get_category_path(self, category_id):
+        """return path for a specific category"""
+        return self.category_repo.get_path(category_id)
+
+    def add_category(self, name, parent_id):
+        """add a new category"""
+        self.category_repo.add(name, parent_id)
+
+    def delete_category(self, category_id):
+        """delete an existing category"""
+        self.category_repo.delete(category_id)
+
+    def get_category_history(self, category_path):
+        """Fetches history for all products under a specific category path."""
+        return self.category_repo.get_history(category_path)
