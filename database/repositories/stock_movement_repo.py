@@ -1,4 +1,3 @@
-# stock_movement_repo.py - نسخة مبسطة
 
 class StockMovementRepository:
     def __init__(self, conn):

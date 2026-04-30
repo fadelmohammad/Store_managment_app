@@ -17,7 +17,7 @@ class PurchaseService:
             raise Exception("Cart is empty")
 
         try:
-            # Start transaction
+       
             self.purchase_repo.begin_transaction()
 
             subtotal = 0.0
@@ -28,22 +28,20 @@ class PurchaseService:
             discount = subtotal * discount_pct
             total_usd = (subtotal - discount) + tax
 
-            # 1. Create Purchase Invoice
             invoice_id = self.purchase_repo.create_invoice(
                 partner_id, total_usd, tax, discount, payment_method
             )
 
-            # 2. Update Stock and Movements
             for item in cart:
-                # Update weighted average cost using inventory service
+              
                 self.inventory_service.update_weighted_average_cost(
                     item["id"], item["qty"], item["price"]
                 )
 
-                # Add to invoice items
+           
                 self.purchase_repo.add_invoice_item(invoice_id, item["id"], item["qty"], item["price"])
 
-                # Update stock with log
+      
                 self.inventory_service.update_stock_with_log(
                     product_id=item["id"],
                     change=item["qty"],
@@ -51,7 +49,7 @@ class PurchaseService:
                     reason=f"Purchase Invoice #{invoice_id} (Rate: {exchange_rate:,.0f} SYP)"
                 )
 
-            # 3. Handle Accounting Ledger
+          
             ledger_lines = [
                 {"account": "Inventory", "debit": total_usd, "credit": 0}
             ]

@@ -10,7 +10,6 @@ class InventoryService:
         if not (product_repo.conn is stock_repo.conn):
             raise ValueError("Repositories must share the same DB connection")
 
-    # --- Products Service ---
 
     def get_products(self):
         products = self.product_repo.get_all()
@@ -93,7 +92,6 @@ class InventoryService:
             if not category_id:
                 raise ValueError("Category ID is required")
             
-            # تمرير إلى category_service
             self.category_service.delete_category(category_id)
             print(f" Category {category_id} deleted via InventoryService")
             
@@ -127,10 +125,10 @@ class InventoryService:
         if quantity < 0:
             raise ValueError("Quantity cannot be negative")
 
-        # Add product and capture returned ID
+   
         product_id = self.product_repo.add(name, category_id, price, cost, quantity, threshold)
         
-        # Record initial stock movement
+  
         self.stock_repo.insert_movement(product_id, "IN", quantity, "Initial stock")
 
         return product_id
@@ -141,7 +139,6 @@ class InventoryService:
     def delete_product(self, product_id):
         self.product_repo.delete(product_id)
 
-    # inventory_service.py - تأكد من هذه الدالة
 
     def update_stock_with_log(self, product_id, change, m_type, reason):
         """Update stock with logging"""
