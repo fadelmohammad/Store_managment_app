@@ -13,9 +13,17 @@ class CategoryService:
         return self.category_repo.get_path(category_id)
 
     def add_category(self, name, parent_id):
-
         self.category_repo.add(name, parent_id)
 
+    def count_products_in_category(self, category_id):
+        """Count products in the given category."""
+        if not category_id:
+            return 0
+
+        if not hasattr(self.category_repo, 'count_products'):
+            raise AttributeError("CategoryRepository must implement count_products(category_id)")
+
+        return self.category_repo.count_products(category_id)
 
     def delete_category(self, category_id):
         try:

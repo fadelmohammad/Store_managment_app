@@ -2,16 +2,6 @@ class ReportRepository:
     def __init__(self, conn):
         self.conn = conn
 
-    def _execute(self, query, params=None):
-        """Execute a query and return the cursor"""
-        cursor = self.conn.cursor()
-        if params:
-            cursor.execute(query, params)
-        else:
-            cursor.execute(query)
-        self.conn.commit()
-        return cursor
-
     # ==========================================
     # Invoice Reports
     # ==========================================
@@ -29,41 +19,36 @@ class ReportRepository:
             {date_clause}
             ORDER BY i.id DESC
         """
-        cursor = self._execute(query)
-        return cursor.fetchall()
+        return self.conn.execute(query).fetchall()
 
     def get_invoice_by_id(self, invoice_id):
         """Get a single invoice with partner details"""
-        cursor = self._execute("""
+        return self.conn.execute("""
             SELECT i.*, a.name as partner_name 
             FROM invoices i 
             LEFT JOIN accounts a ON i.partner_id = a.id 
             WHERE i.id = ?
-        """, (invoice_id,))
-        return cursor.fetchone()
+        """, (invoice_id,)).fetchone()
 
     def get_invoice_items(self, invoice_id):
         """Get all items for a specific invoice"""
-        cursor = self._execute("""
+        return self.conn.execute("""
             SELECT p.name, ii.quantity, ii.price, (ii.quantity * ii.price) as subtotal
             FROM invoice_items ii
             JOIN products p ON ii.product_id = p.id
             WHERE ii.invoice_id = ?
-        """, (invoice_id,))
-        return cursor.fetchall()
+        """, (invoice_id,)).fetchall()
 
     def get_invoice_count(self, date_clause=""):
         """Get total number of invoices with optional date filter"""
         query = f"SELECT COUNT(*) as count FROM invoices i {date_clause}"
-        cursor = self._execute(query)
-        result = cursor.fetchone()
+        result = self.conn.execute(query).fetchone()
         return result[0] if result else 0
 
     def get_invoice_total_sum(self, date_clause=""):
         """Get sum of all invoice totals with optional date filter"""
         query = f"SELECT SUM(total) as total FROM invoices i {date_clause}"
-        cursor = self._execute(query)
-        result = cursor.fetchone()
+        result = self.conn.execute(query).fetchone()
         return result[0] if result and result[0] else 0.0
 
     # ==========================================
@@ -76,7 +61,7 @@ class ReportRepository:
     def get_all_products_for_report(self):
         """Get all products with full details for inventory report"""
         try:
-            cursor = self._execute("""
+            results = self.conn.execute("""
                 SELECT 
                     p.id, 
                     p.name,  
@@ -88,9 +73,8 @@ class ReportRepository:
                 FROM products p
                 LEFT JOIN categories c ON p.category_id = c.id
                 ORDER BY p.name
-            """)
+            """).fetchall()
             
-            results = cursor.fetchall()
             print(f"📊 get_all_products_for_report: found {len(results)} products")
             
             # طباعة أول منتج للتأكد
@@ -105,33 +89,30 @@ class ReportRepository:
 
     def get_total_inventory_value(self):
         """Calculate total inventory value (sum of quantity * cost)"""
-        cursor = self._execute("""
+        result = self.conn.execute("""
             SELECT SUM(quantity * cost) as total_value 
             FROM products
-        """)
-        result = cursor.fetchone()
+        """).fetchone()
         return result[0] if result and result[0] else 0.0
 
     def get_low_stock_products(self, threshold=5):
         """Get products with quantity below threshold"""
-        cursor = self._execute("""
+        return self.conn.execute("""
             SELECT p.id, p.name, p.quantity, p.min_threshold
             FROM products p
             WHERE p.quantity <= ?
             ORDER BY p.quantity ASC
-        """, (threshold,))
-        return cursor.fetchall()
+        """, (threshold,)).fetchall()
 
     def get_stock_value_by_category(self):
         """Get inventory value grouped by category"""
-        cursor = self._execute("""
+        return self.conn.execute("""
             SELECT c.name as category, SUM(p.quantity * p.cost) as total_value
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
             GROUP BY c.id, c.name
             ORDER BY total_value DESC
-        """)
-        return cursor.fetchall()
+        """).fetchall()
 
     # ==========================================
     # Stock Movement Reports
@@ -159,8 +140,7 @@ class ReportRepository:
         
         query += " ORDER BY sm.created_at DESC"
         
-        cursor = self._execute(query, params)
-        return cursor.fetchall()
+        return self.conn.execute(query, params).fetchall()
 
     def get_movements_by_product(self, product_id, start_date=None, end_date=None):
         """Get stock movements for a specific product"""
@@ -183,8 +163,7 @@ class ReportRepository:
         
         query += " ORDER BY sm.created_at DESC"
         
-        cursor = self._execute(query, params)
-        return cursor.fetchall()
+        return self.conn.execute(query, params).fetchall()
 
     # ==========================================
     # Profit & Loss Reports
@@ -204,8 +183,7 @@ class ReportRepository:
             JOIN accounts_ledger a ON l.account_id = a.id
             WHERE a.name = ? {date_clause}
         """
-        cursor = self._execute(query, (account_name,))
-        result = cursor.fetchone()
+        result = self.conn.execute(query, (account_name,)).fetchone()
         return result[0] if result and result[0] else 0.0
 
     def get_expense_breakdown(self, date_clause=""):
@@ -219,8 +197,7 @@ class ReportRepository:
             GROUP BY e.description
             ORDER BY total DESC
         """
-        cursor = self._execute(query)
-        return cursor.fetchall()
+        return self.conn.execute(query).fetchall()
 
     def get_revenue_by_period(self, period_type="day", start_date=None, end_date=None):
         """
@@ -249,8 +226,7 @@ class ReportRepository:
         
         query += f" GROUP BY period ORDER BY period ASC"
         
-        cursor = self._execute(query, params)
-        return cursor.fetchall()
+        return self.conn.execute(query, params).fetchall()
 
     # ==========================================
     # Dashboard / Summary Reports
@@ -258,7 +234,7 @@ class ReportRepository:
 
     def get_dashboard_summary(self):
         """Get key metrics for dashboard"""
-        cursor = self._execute("""
+        return self.conn.execute("""
             SELECT 
                 (SELECT COUNT(*) FROM products) as total_products,
                 (SELECT COUNT(*) FROM products WHERE quantity <= min_threshold) as low_stock_count,
@@ -266,8 +242,7 @@ class ReportRepository:
                 (SELECT SUM(total) FROM invoices) as total_sales,
                 (SELECT COUNT(*) FROM accounts WHERE role = 'Customer') as total_customers,
                 (SELECT COUNT(*) FROM accounts WHERE role = 'Supplier') as total_suppliers
-        """)
-        return cursor.fetchone()
+        """).fetchone()
 
     def get_top_products(self, limit=10, start_date=None, end_date=None):
         """Get top selling products"""
@@ -289,5 +264,4 @@ class ReportRepository:
                      LIMIT ?"""
         params.append(limit)
         
-        cursor = self._execute(query, params)
-        return cursor.fetchall()
+        return self.conn.execute(query, params).fetchall()
