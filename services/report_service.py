@@ -1,43 +1,211 @@
-# report_service.py
+
+from datetime import datetime
+
 
 class ReportingService:
-    def __init__(self, product_repo, stock_repo):
+    def __init__(self, report_repo, product_repo, stock_repo):
+        """
+        Initialize ReportingService with required repositories
+        """
+        self.report_repo = report_repo
         self.product_repo = product_repo
         self.stock_repo = stock_repo
+
+    # ==========================================
+    # Helper Methods
+    # ==========================================
+
+    def _get_date_clause_from_period(self, period, table_alias=""):
+        """
+        Convert period string to SQL date clause
+        period: "Today", "Last 7 Days", "This Month", "All Time"
+        table_alias: Optional table alias (e.g., "i." for invoices)
+        """
+        prefix = f"{table_alias}" if table_alias else ""
         
-    def get_sales_trend(self, start_date, end_date):
-        query = """
-            SELECT date(e.date) as day, SUM(l.credit) as daily_sales
-            FROM journal_entries e
-            JOIN journal_lines l ON e.id = l.entry_id
-            JOIN accounts_ledger a ON l.account_id = a.id
-            WHERE a.name = 'Sales Revenue' AND date(e.date) BETWEEN ? AND ?
-            GROUP BY day ORDER BY day ASC
+        if period == "Today":
+            return f"WHERE {prefix}date >= date('now')"
+        elif period == "Last 7 Days":
+            return f"WHERE {prefix}date >= date('now', '-7 days')"
+        elif period == "This Month":
+            return f"WHERE {prefix}date >= date('now', 'start of month')"
+        else:
+            return ""
+
+    def _get_date_filter_for_ledger(self, period):
+        """Get date filter for ledger/journals (uses e.date format)"""
+        if period == "Today":
+            return "AND e.date >= date('now')"
+        elif period == "Last 7 Days":
+            return "AND e.date >= date('now', '-7 days')"
+        elif period == "This Month":
+            return "AND e.date >= date('now', 'start of month')"
+        return ""
+
+    # ==========================================
+    # Invoice Reports
+    # ==========================================
+
+    def get_invoices(self, period="All Time"):
+        """Get all invoices with date filter"""
+        date_clause = self._get_date_clause_from_period(period, "")
+        return self.report_repo.get_all_invoices(date_clause)
+
+    def get_invoice_details(self, invoice_id):
+        """Get full details of a specific invoice"""
+        invoice = self.report_repo.get_invoice_by_id(invoice_id)
+        if not invoice:
+            return None, None
+        
+        items = self.report_repo.get_invoice_items(invoice_id)
+        return invoice, items
+
+    def get_invoice_summary(self, period="All Time"):
+        """Get summary statistics for invoices"""
+        date_clause = self._get_date_clause_from_period(period, "")
+        
+        return {
+            "count": self.report_repo.get_invoice_count(date_clause),
+            "total": self.report_repo.get_invoice_total_sum(date_clause)
+        }
+
+    # ==========================================
+    # Inventory Reports
+    # ==========================================
+
+    def get_inventory_report(self):
+        """Get complete inventory report with all products"""
+        products = self.report_repo.get_all_products_for_report()
+        total_value = self.report_repo.get_total_inventory_value()
+        low_stock = self.report_repo.get_low_stock_products(5)
+        
+        formatted_products = []
+        for p in products:
+            if hasattr(p, 'keys'):
+                formatted_products.append(dict(p))
+            else:
+                formatted_products.append({
+                    "id": p[0],
+                    "name": p[1],
+                    "sku": p[2] if len(p) > 2 else "",
+                    "price": p[3] if len(p) > 3 else 0,
+                    "cost": p[4] if len(p) > 4 else 0,
+                    "quantity": p[5] if len(p) > 5 else 0,
+                    "min_threshold": p[6] if len(p) > 6 else 0,
+                    "category": p[7] if len(p) > 7 else "Uncategorized"
+                })
+        
+        return {
+            "products": formatted_products,
+            "total_value": total_value,
+            "low_stock_count": len(low_stock),
+            "low_stock_products": low_stock
+        }
+
+    def get_stock_movements(self, start_date=None, end_date=None, period="All Time"):
+        """Get stock movements with optional date filter"""
+        if period != "All Time":
+            # Convert period to dates if needed
+            pass
+        
+        return self.report_repo.get_stock_movements(start_date, end_date)
+
+    # ==========================================
+    # Profit & Loss Reports
+    # ==========================================
+
+    def get_financial_report(self, period="All Time"):
         """
-        self.cursor.execute(query, (start_date, end_date))
-        rows = self.cursor.fetchall()
-        return [row["day"] for row in rows], [row["daily_sales"] for row in rows]
-
-    def get_financial_report(self, start_date, end_date):
-        query = """
-            SELECT a.name, SUM(l.debit) as total_debit, SUM(l.credit) as total_credit
-            FROM journal_lines l
-            JOIN journal_entries e ON l.entry_id = e.id
-            JOIN accounts_ledger a ON l.account_id = a.id
-            WHERE date(e.date) BETWEEN ? AND ?
-            GROUP BY a.name
+        Generate complete Profit & Loss statement
+        Returns dictionary with sales, cogs, expenses, net_profit
         """
-        self.cursor.execute(query, (start_date, end_date))
-        rows = self.cursor.fetchall()
+        date_clause = self._get_date_filter_for_ledger(period)
+        
+        try:
+            revenue = self.report_repo.get_ledger_account_balance(
+                'Sales Revenue', 'SUM(credit) - SUM(debit)', date_clause
+            )
+            cogs = self.report_repo.get_ledger_account_balance(
+                'Cost of Goods Sold', 'SUM(debit) - SUM(credit)', date_clause
+            )
+            expenses = self.report_repo.get_ledger_account_balance(
+                'General Expense', 'SUM(debit) - SUM(credit)', date_clause
+            )
+            
+            net_profit = revenue - cogs - expenses
+            
+            # Get expense breakdown
+            expense_breakdown = self.report_repo.get_expense_breakdown(date_clause)
+            
+            formatted_expenses = []
+            for exp in expense_breakdown:
+                if hasattr(exp, 'keys'):
+                    formatted_expenses.append(dict(exp))
+                else:
+                    formatted_expenses.append({
+                        "description": exp[0],
+                        "total": exp[1] if len(exp) > 1 else 0
+                    })
+            
+            return {
+                "sales": revenue,
+                "cogs": cogs,
+                "expenses": expenses,
+                "net_profit": net_profit,
+                "expense_breakdown": formatted_expenses,
+                "period": period
+            }
+            
+        except Exception as e:
+            print(f"Error in get_financial_report: {e}")
+            return {
+                "sales": 0.0,
+                "cogs": 0.0,
+                "expenses": 0.0,
+                "net_profit": 0.0,
+                "expense_breakdown": [],
+                "period": period,
+                "error": str(e)
+            }
 
-        report = {"sales": 0.0, "cogs": 0.0, "expenses": 0.0, "net_profit": 0.0}
-        for row in rows:
-            if row["name"] == "Sales Revenue":
-                report["sales"] = row["total_credit"] or 0.0
-            elif row["name"] == "Cost of Goods Sold":
-                report["cogs"] = row["total_debit"] or 0.0
-            elif row["type"] == "Expense":
-                report["expenses"] += row["total_debit"] or 0.0
+    def get_sales_trend(self, period="All Time"):
+        """Get sales trend data for charts"""
+        date_clause = self._get_date_filter_for_ledger(period)
+        
+        # Determine grouping based on period
+        if period == "Today":
+            group_by = "hour"
+        elif period == "Last 7 Days":
+            group_by = "day"
+        else:
+            group_by = "day"
+        
+        # For now, return revenue by day
+        revenue_data = self.report_repo.get_revenue_by_period(
+            period_type="day" if group_by == "day" else "month"
+        )
+        
+        days = []
+        sales = []
+        for row in revenue_data:
+            if hasattr(row, 'keys'):
+                days.append(row['period'])
+                sales.append(row['total'] or 0)
+            else:
+                days.append(row[0])
+                sales.append(row[1] if len(row) > 1 else 0)
+        
+        return days, sales
 
-        report["net_profit"] = report["sales"] - report["cogs"] - report["expenses"]
-        return report
+    # ==========================================
+    # Dashboard Reports
+    # ==========================================
+
+    def get_dashboard_summary(self):
+        """Get all metrics for dashboard"""
+        return self.report_repo.get_dashboard_summary()
+
+    def get_top_products(self, limit=10, period="All Time"):
+        """Get top selling products"""
+        # For now, ignore period for top products
+        return self.report_repo.get_top_products(limit)
