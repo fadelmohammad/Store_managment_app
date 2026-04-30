@@ -13,7 +13,7 @@ class ProductRepository:
                 c.name AS category
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
-            ORDER BY p.name
+            ORDER BY p.id
             """
         ).fetchall()
 

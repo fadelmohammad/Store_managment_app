@@ -4,35 +4,38 @@ class AccountRepository:
     def __init__(self, conn):
         self.conn = conn
 
+    def _execute(self, query, params=None):
+        """Execute a query and return the cursor"""
+        cursor = self.conn.cursor()
+        if params:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
+        self.conn.commit()
+        return cursor
+
     def get_by_id(self, account_id):
         """Fetches account details by ID."""
         query = "SELECT * FROM accounts WHERE id = ?"
-        cursor = self.conn.execute(query, (account_id,))
+        cursor = self._execute(query, (account_id,))
         return cursor.fetchone()
 
-    def fetch_accounts(self, search=None, role=None):
-        query = "SELECT id, name, role, phone, balance FROM accounts WHERE 1=1"
-        params = []
+    def get_by_role(self, role):
+        """Fetches account details by ROLE."""
+        query = "SELECT * FROM accounts WHERE role = ? ORDER BY name"
 
-        if role and role != "All":
-            query += " AND role = ?"
-            params.append(role)
+        cursor = self._execute(query, (role,))
 
-        if search:
-            query += " AND (name LIKE ? OR phone LIKE ?)"
-            params.extend([f"%{search}%", f"%{search}%"])
+        return cursor.fetchall()
 
-        return self.conn.execute(query, params).fetchall()
-
-    def add(self, name, role, phone, email, address, balance):
-
-        query = """
-            INSERT INTO accounts (name, role, phone, email, address, balance)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """
-        params = (name, role, phone, email, address, balance)
-
-        cursor = self.conn.execute(query, params)
+    def add(self, name, role, phone, email, address):
+        cursor = self._execute(
+            """
+            INSERT INTO accounts (name, role, phone, email, address)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (name, role, phone, email, address),
+        )
         return cursor.lastrowid
 
     def update(self, account_id, data):
@@ -47,10 +50,10 @@ class AccountRepository:
             data['email'], data['address'], account_id
         )
         
-        self.conn.execute(query, params)
+        self._execute(query, params)
 
     def delete(self, account_id):
         """Removes the account record from the database."""
         query = "DELETE FROM accounts WHERE id = ?"
-        self.conn.execute(query, (account_id,))
+        self._execute(query, (account_id,))
 

@@ -1,33 +1,30 @@
 # account_service.py
 
 class AccountService:
-    def __init__(self, conn, account_repo):
-        self.conn = conn
+    def __init__(self, account_repo):
         self.account_repo = account_repo
 
     def get_by_role(self, role):
         """Fetches accounts based on role"""
         return 
 
-    def create_account(self, name, role, phone, email, address):
+    def add_account(self, name, role, phone, email, address):
+        """adds a new account"""
         name = name.strip()
 
         if not name:
             raise ValueError("Name is required")
 
+        # Optional but recommended
         if email and "@" not in email:
             raise ValueError("Invalid email format")
 
-        self.account_repo.add(
-            name=name,
-            role=role,
-            phone=phone,
-            email=email,
-            address=address,
-            balance=0
-        )
+        with self.account_repo.conn:
+            account_id = self.account_repo.add(
+                name, role, phone, email, address
+            )
 
-        self.conn.commit()
+            return account_id
 
     def update_account(self, account_id, data):
         """Orchestrates business logic and calls the repository."""

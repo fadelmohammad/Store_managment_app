@@ -8,8 +8,11 @@ from database.repositories.stock_movement_repo import StockMovementRepository
 from database.repositories.category_repo import CategoryRepository
 from database.repositories.settings_repo import SettingRepository
 from database.repositories.account_repo import AccountRepository
+from database.repositories.report_repo import ReportRepository
 from services.inventory_service import InventoryService
+from services.category_service import CategoryService
 from services.report_service import ReportingService
+
 from database.core import Database
 from services.ledger_service import LedgerService
 from services.sales_service import SalesService
@@ -33,18 +36,36 @@ class StoreApp(ctk.CTk):
         self.db_connection = DatabaseConnection()
         self.conn = self.db_connection.get_connection()
 
+        self.db = self.conn
+
         self.stock_repo = StockMovementRepository(self.conn)
         self.product_repo = ProductRepository(self.conn)
         self.category_repo = CategoryRepository(self.conn)
-        self.inventory_service = InventoryService(self.product_repo, self.stock_repo, self.category_repo)
+        self.report_repo = ReportRepository(self.conn)
+        self.category_service = CategoryService(self.category_repo) 
+        self.inventory_service = InventoryService(self.product_repo, self.stock_repo, self.category_service,self.category_repo)
 
+        
         self.setting_repo = SettingRepository(self.conn)
         self.account_repo = AccountRepository(self.conn)
-        self.report_service = ReportingService(self.conn)
+        self.report_service = ReportingService(self.report_repo,self.product_repo,self.stock_repo)  
 
         create_tables(self.conn)
         seed_ledger_accounts(self.conn)
         insert_dummy_data(self.conn)
+
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM products")
+        product_count = cursor.fetchone()[0]
+        print(f"📊 Total products in database: {product_count}")
+
+        if product_count > 0:
+            cursor.execute("SELECT id, name, quantity, cost FROM products LIMIT 5")
+            products = cursor.fetchall()
+            for p in products:
+                print(f"  - Product: ID={p[0]}, Name={p[1]}, Qty={p[2]}, Cost={p[3]}")
+        else:
+            print("⚠️ No products found! Please add products first.")
 
         # --- THEME & WINDOW CONFIG ---
         ctk.set_appearance_mode("dark")
@@ -55,9 +76,9 @@ class StoreApp(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
         # Service Layer (Business Logic)
-        # self.ledger_service = LedgerService(self.db)
-        # self.sales_service = SalesService(self.db, self.ledger_service)
-        # self.purchase_service = PurchaseService(self.db, self.ledger_service)
+        self.ledger_service = LedgerService(self.db)
+        self.sales_service = SalesService(self.db, self.ledger_service)
+        self.purchase_service = PurchaseService(self.db, self.ledger_service)
 
         # Load the rate from DB, fallback to 15000 if not found
         saved_rate = self.setting_repo.get("exchange_rate", "15000")
@@ -84,16 +105,14 @@ class StoreApp(ctk.CTk):
     def init_frames(self):
         """Initializes and registers all UI modules."""
         self.frames = {
-            "dashboard": DashboardFrame(self.container, self),
-            "inventory": InventoryFrame(self.container, self),
-            "pos": POSFrame(self.container, self, self.db, self.sales_service),
-            "accounts": AccountsFrame(self.container, self, self.db),
-            "cashbox": CashboxFrame(self.container, self, self.db, self.ledger_service),
-            "purchase": PurchaseFrame(
-                self.container, self, self.db, self.purchase_service
-            ),
-            "reports": ReportsFrame(self.container, self, self.db),
-        }
+            "dashboard": DashboardFrame(self.container, self),           
+            "inventory": InventoryFrame(self.container, self),           
+            # "pos": POSFrame(self.container, self, self.db, self.sales_service),  
+            "accounts": AccountsFrame(self.container, self, self.db),           
+            # "cashbox": CashboxFrame(self.container, self, self.db, self.ledger_service),  
+            # "purchase": PurchaseFrame(self.container, self, self.db, self.purchase_service),  
+            "reports": ReportsFrame(self.container, self, self.db),     
+    }
 
     # ==========================================
     # NAVIGATION LOGIC
