@@ -84,21 +84,70 @@ class PurchaseFrame(ctk.CTkFrame):
 
         self.refresh_data()
 
+
     def refresh_data(self):
-        # Update Suppliers
-        suppliers = self.app.account_repo.get_by_role("Supplier")
-        self.supplier_map = {s["name"]: s["id"] for s in suppliers}
+        """Refresh suppliers and products lists"""
+        try:
+            print("Refreshing purchase data...")
+            
+            print("  - Fetching suppliers...")
+            suppliers = self.app.account_repo.get_by_role("Supplier")
+            print(f"  - Found {len(suppliers) if suppliers else 0} suppliers")
+            
+            self.supplier_map = {}
+            if suppliers:
+                for s in suppliers:
+                    if hasattr(s, 'keys'):
+                        supplier_name = s["name"] if "name" in s.keys() else s[1]
+                        supplier_id = s["id"] if "id" in s.keys() else s[0]
+                        self.supplier_map[supplier_name] = supplier_id
+                        print(f"    - Supplier: {supplier_name} (ID: {supplier_id})")
+                    else:
+                        self.supplier_map[s[1]] = s[0]  
+                        print(f"    - Supplier: {s[1]} (ID: {s[0]})")
+            
+            if self.supplier_map:
+                self.supplier_dropdown.configure(values=list(self.supplier_map.keys()))
+            else:
+                self.supplier_dropdown.configure(values=["No Suppliers Found"])
+            
+            print("  - Fetching products...")
+            products = self.app.product_repo.get_all()
+            print(f"  - Found {len(products) if products else 0} products")
+            
+            self.product_map = {}
+            if products:
+                for p in products:
+                    if hasattr(p, 'keys'):
+                        product_id = p["id"] if "id" in p.keys() else p[0]
+                        product_name = p["name"] if "name" in p.keys() else p[1]
+                        product_cost = p["cost"] if "cost" in p.keys() else (p[4] if len(p) > 4 else 0)
+                        product_price = p["price"] if "price" in p.keys() else (p[3] if len(p) > 3 else 0)
+                        
+                        self.product_map[product_name] = {
+                            "id": product_id,
+                            "name": product_name,
+                            "cost": product_cost,
+                            "price": product_price
+                        }
+                        print(f"    - Product: {product_name} (ID: {product_id})")
+                    else:
+                        self.product_map[p[1]] = {
+                            "id": p[0],
+                            "name": p[1],
+                            "cost": p[4] if len(p) > 4 else 0,
+                            "price": p[3] if len(p) > 3 else 0
+                        }
+                        print(f"    - Product: {p[1]} (ID: {p[0]})")
+            
+            self.prod_dropdown.configure(values=list(self.product_map.keys()))
+            print(f"Refresh complete. Products: {len(self.product_map)}, Suppliers: {len(self.supplier_map)}")
+            
+        except Exception as e:
+            print(f"Error in refresh_data: {e}")
+            import traceback
+            traceback.print_exc()
 
-        # Update the dropdown values
-        if self.supplier_map:
-            self.supplier_dropdown.configure(values=list(self.supplier_map.keys()))
-        else:
-            self.supplier_dropdown.configure(values=["No Suppliers Found"])
-
-        # Update Products
-        products = self.db.get_all_products()
-        self.product_map = {p["name"]: p for p in products}
-        self.prod_dropdown.configure(values=list(self.product_map.keys()))
 
     def add_to_cart(self):
         p_name = self.prod_var.get()

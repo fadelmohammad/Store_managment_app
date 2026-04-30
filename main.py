@@ -9,6 +9,7 @@ from database.repositories.category_repo import CategoryRepository
 from database.repositories.settings_repo import SettingRepository
 from database.repositories.account_repo import AccountRepository
 from database.repositories.report_repo import ReportRepository
+from database.repositories.purchase_repo import PurchaseRepository
 from services.inventory_service import InventoryService
 from services.category_service import CategoryService
 from services.report_service import ReportingService
@@ -42,6 +43,7 @@ class StoreApp(ctk.CTk):
         self.product_repo = ProductRepository(self.conn)
         self.category_repo = CategoryRepository(self.conn)
         self.report_repo = ReportRepository(self.conn)
+        self.purchase_repo = PurchaseRepository(self.conn)
         self.category_service = CategoryService(self.category_repo) 
         self.inventory_service = InventoryService(self.product_repo, self.stock_repo, self.category_service,self.category_repo)
 
@@ -78,7 +80,8 @@ class StoreApp(ctk.CTk):
         # Service Layer (Business Logic)
         self.ledger_service = LedgerService(self.db)
         self.sales_service = SalesService(self.db, self.ledger_service)
-        self.purchase_service = PurchaseService(self.db, self.ledger_service)
+        # self.purchase_service = PurchaseService(self.db, self.ledger_service)
+        self.purchase_service = PurchaseService(self.purchase_repo,self.product_repo,self.stock_repo,self.inventory_service,self.ledger_service,self.account_repo)
 
         # Load the rate from DB, fallback to 15000 if not found
         saved_rate = self.setting_repo.get("exchange_rate", "15000")
@@ -110,7 +113,7 @@ class StoreApp(ctk.CTk):
             # "pos": POSFrame(self.container, self, self.db, self.sales_service),  
             "accounts": AccountsFrame(self.container, self, self.db),           
             # "cashbox": CashboxFrame(self.container, self, self.db, self.ledger_service),  
-            # "purchase": PurchaseFrame(self.container, self, self.db, self.purchase_service),  
+            "purchase": PurchaseFrame(self.container, self, self.db, self.purchase_service),  
             "reports": ReportsFrame(self.container, self, self.db),     
     }
 

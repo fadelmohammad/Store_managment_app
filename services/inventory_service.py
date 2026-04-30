@@ -141,7 +141,10 @@ class InventoryService:
     def delete_product(self, product_id):
         self.product_repo.delete(product_id)
 
+    # inventory_service.py - تأكد من هذه الدالة
+
     def update_stock_with_log(self, product_id, change, m_type, reason):
+        """Update stock with logging"""
         product = self.get_product_by_id(product_id)
 
         if not product:
@@ -153,7 +156,10 @@ class InventoryService:
             raise ValueError("Insufficient stock")
 
         self.product_repo.update_quantity(product_id, new_qty)
+        
+       
         self.stock_repo.insert_movement(product_id, m_type, change, reason)
+
 
     def update_weighted_average_cost(self, product_id, new_qty, purchase_price):
         product = self.get_product_by_id(product_id)

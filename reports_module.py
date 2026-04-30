@@ -67,15 +67,16 @@ class ReportsFrame(ctk.CTkFrame):
         self.inv_tree.pack(fill="both", expand=True, padx=10, pady=10)
         self.inv_tree.bind("<Double-1>", lambda e: self.open_invoice_details())
 
+
     def open_invoice_details(self):
         sel = self.inv_tree.selection()
         if not sel:
             messagebox.showwarning("Selection", "Please select an invoice to view.")
             return
-
+        
         inv_id = self.inv_tree.item(sel[0])["values"][0]
-
-        # ✅ Use report_service to get invoice details
+        
+        # Use report_service
         inv_data, items = self.app.report_service.get_invoice_details(inv_id)
 
         if not inv_data:
@@ -94,15 +95,21 @@ class ReportsFrame(ctk.CTkFrame):
 
         ctk.CTkLabel(top_f, text=f"Invoice #{inv_id}", font=("Arial", 18, "bold")).grid(row=0, column=0, sticky="w")
 
-        # Handle different return types
+        # ✅ استخدام الوصول المباشر بدلاً من .get()
         if hasattr(inv_data, 'keys'):
-            partner_name = inv_data.get('partner_name', '')
-            inv_date = inv_data.get('date', '')
-            payment_method = inv_data.get('payment_method', '')
+            partner_name = inv_data['partner_name'] if inv_data['partner_name'] else ""
+            inv_date = inv_data['date'] if inv_data['date'] else ""
+            payment_method = inv_data['payment_method'] if inv_data['payment_method'] else ""
+            tax = inv_data['tax'] if inv_data['tax'] else 0
+            discount = inv_data['discount'] if inv_data['discount'] else 0
+            total = inv_data['total'] if inv_data['total'] else 0
         else:
             partner_name = inv_data[5] if len(inv_data) > 5 else ""
             inv_date = inv_data[3] if len(inv_data) > 3 else ""
             payment_method = inv_data[6] if len(inv_data) > 6 else ""
+            tax = inv_data[7] if len(inv_data) > 7 else 0
+            discount = inv_data[8] if len(inv_data) > 8 else 0
+            total = inv_data[4] if len(inv_data) > 4 else 0
 
         ctk.CTkLabel(top_f, text=f"Partner: {partner_name}").grid(row=1, column=0, sticky="w")
         ctk.CTkLabel(top_f, text=f"Date: {inv_date}").grid(row=0, column=1, sticky="e")
@@ -132,21 +139,11 @@ class ReportsFrame(ctk.CTkFrame):
         bot_f = ctk.CTkFrame(detail_win, fg_color="transparent")
         bot_f.pack(fill="x", padx=20, pady=20)
 
-        if hasattr(inv_data, 'keys'):
-            tax = inv_data.get('tax', 0)
-            discount = inv_data.get('discount', 0)
-            total = inv_data.get('total', 0)
-        else:
-            tax = inv_data[7] if len(inv_data) > 7 else 0
-            discount = inv_data[8] if len(inv_data) > 8 else 0
-            total = inv_data[4] if len(inv_data) > 4 else 0
-
         summary_text = (f"Tax: €{tax:.2f}    "
                         f"Discount: €{discount:.2f}    "
                         f"TOTAL: €{total:.2f}")
 
         ctk.CTkLabel(bot_f, text=summary_text, font=("Arial", 14, "bold")).pack(side="right")
-
     # ==========================================
     # PROFIT & LOSS SECTION
     # ==========================================
@@ -206,29 +203,53 @@ class ReportsFrame(ctk.CTkFrame):
         self.calculate_inventory()
         self.load_invoices()
 
+   # reports_module.py - أصلح دالة load_invoices
+
     def load_invoices(self):
-        """Load invoices using report_service"""
-        for i in self.inv_tree.get_children():
+        """Loads and filters the invoice list."""
+        for i in self.inv_tree.get_children(): 
             self.inv_tree.delete(i)
-
-        period = self.period_var.get()
         
-        # ✅ Use report_service
-        invoices = self.app.report_service.get_invoices(period)
+        period = self.period_var.get()
+        if period == "Today":
+            date_clause = "WHERE date >= date('now')"
+        elif period == "Last 7 Days":
+            date_clause = "WHERE date >= date('now', '-7 days')"
+        elif period == "This Month":
+            date_clause = "WHERE date >= date('now', 'start of month')"
+        else:
+            date_clause = ""
 
-        for inv in invoices:
-            if hasattr(inv, 'keys'):
-                partner_name = inv.get('partner_name', 'Walk-in')
+        query = f"""
+            SELECT i.id, i.type, i.date, a.name AS partner_name, i.total, i.payment_method, i.status
+            FROM invoices i
+            LEFT JOIN accounts a ON i.partner_id = a.id
+            {date_clause}
+            ORDER BY i.id DESC
+        """
+
+        cursor = self.db.cursor()
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        
+        for r in rows:
+            # ✅ استخدام الوصول المباشر بدلاً من .get()
+            if hasattr(r, 'keys'):
+                # r هو sqlite3.Row
+                partner_name = r['partner_name'] if r['partner_name'] else "Walk-in"
                 self.inv_tree.insert("", "end", values=(
-                    inv['id'], inv['type'], inv['date'], partner_name,
-                    f"€{inv['total']:.2f}", inv['payment_method'], inv['status']
+                    r['id'], r['type'], r['date'], partner_name, 
+                    f"€{r['total']:.2f}", r['payment_method'], r['status']
                 ))
             else:
-                partner_name = inv[3] if inv[3] else "Walk-in"
+                # r هو tuple
+                partner_name = r[3] if r[3] else "Walk-in"
                 self.inv_tree.insert("", "end", values=(
-                    inv[0], inv[1], inv[2], partner_name,
-                    f"€{inv[4]:.2f}", inv[5], inv[6]
+                    r[0], r[1], r[2], partner_name, 
+                    f"€{r[4]:.2f}", r[5], r[6]
                 ))
+
+
 
     def calculate_pl(self):
         """Calculate Profit & Loss using report_service"""
@@ -252,7 +273,10 @@ class ReportsFrame(ctk.CTkFrame):
             if hasattr(exp, 'keys'):
                 self.expense_tree.insert("", "end", values=(exp['description'], f"€{exp['total']:,.2f}"))
             else:
+                # exp is tuple
                 self.expense_tree.insert("", "end", values=(exp[0], f"€{exp[1]:,.2f}"))
+
+
 
     def calculate_inventory(self):
         """Calculate inventory report using report_service"""
@@ -260,12 +284,12 @@ class ReportsFrame(ctk.CTkFrame):
             for i in self.stock_tree.get_children():
                 self.stock_tree.delete(i)
 
-            # ✅ Use report_service
+            # Use report_service
             inventory_data = self.app.report_service.get_inventory_report()
             
-            for p in inventory_data['products']:
+            for p in inventory_data.get('products', []):
                 asset_value = p['quantity'] * p['cost']
-                tags = ("low_stock",) if p['quantity'] <= p['min_threshold'] else ()
+                tags = ("low_stock",) if p['quantity'] <= p.get('min_threshold', 5) else ()
                 
                 self.stock_tree.insert("", "end", values=(
                     p['id'], p['name'], p['quantity'],
@@ -273,11 +297,13 @@ class ReportsFrame(ctk.CTkFrame):
                     f"€{asset_value:.2f}"
                 ), tags=tags)
 
-            self.stock_val_lbl.configure(text=f"Total Inventory Value: €{inventory_data['total_value']:,.2f}")
+            self.stock_val_lbl.configure(text=f"Total Inventory Value: €{inventory_data.get('total_value', 0):,.2f}")
             self.stock_tree.tag_configure("low_stock", foreground="#e74c3c")
 
         except Exception as e:
             print(f"Inventory Report Error: {e}")
+            import traceback
+            traceback.print_exc()
 
     def get_date_filter(self):
         """Keep for backward compatibility - will be removed later"""

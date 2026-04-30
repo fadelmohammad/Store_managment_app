@@ -20,13 +20,35 @@ class AccountRepository:
         cursor = self._execute(query, (account_id,))
         return cursor.fetchone()
 
+
     def get_by_role(self, role):
         """Fetches account details by ROLE."""
-        query = "SELECT * FROM accounts WHERE role = ? ORDER BY name"
-
-        cursor = self._execute(query, (role,))
-
-        return cursor.fetchall()
+        try:
+            query = "SELECT * FROM accounts WHERE role = ? ORDER BY name"
+            cursor = self._execute(query, (role,))
+            results = cursor.fetchall()
+            
+            print(f"🔍 get_by_role('{role}'): found {len(results)} accounts")
+            
+            # Convert to list of dictionaries for easier access
+            formatted = []
+            for row in results:
+                if hasattr(row, 'keys'):
+                    formatted.append(dict(row))
+                else:
+                    formatted.append({
+                        "id": row[0],
+                        "name": row[1],
+                        "role": row[2],
+                        "phone": row[3] if len(row) > 3 else "",
+                        "email": row[4] if len(row) > 4 else "",
+                        "address": row[5] if len(row) > 5 else "",
+                        "balance": row[6] if len(row) > 6 else 0
+                    })
+            return formatted
+        except Exception as e:
+            print(f"❌ Error in get_by_role: {e}")
+            return []
 
     def add(self, name, role, phone, email, address):
         cursor = self._execute(
