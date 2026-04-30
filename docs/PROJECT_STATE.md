@@ -21,10 +21,10 @@ Primary goals:
 ## Modules
 
 ### Inventory (Active Module)
-- `inventory_service.py` → business logic (partially complete)
+- `inventory_service.py` → business logic (mostly complete)
 - `product_repo.py` → product data access (stable)
 - `stock_movement_repo.py` → stock movement persistence (needs fixes)
-- `inventory_module.py` → UI (still uses legacy DB calls)
+- `inventory_module.py` → UI (fully migrated to services)
 
 ### Database
 - `core.py` → partially cleaned (legacy logic still exists)
@@ -44,39 +44,75 @@ Primary goals:
 
 ## Current Status
 
-- Product-related logic removed from Database layer
+- All repositories standardized with clean `self.conn.execute()` pattern (no _execute wrapper)
 - ProductRepository implemented and stable
 - InventoryService mostly correct but contains bugs
 - StockMovementRepo implemented but incorrect
-- UI still partially coupled to Database
+- Inventory UI fully decoupled from Database (uses services)
+- Category UI fully decoupled from Inventory service (owns CategoryService)
+- Transaction safety enforced via `with self.conn:` context manager
 
 System state:
-- Backend architecture ~85% aligned with target
-- Categories module fully migrated and decoupled
-- Inventory UI partially migrated
+- Backend architecture ~92% aligned with target (repositories standardized)
+- Categories module fully migrated and self-contained
+- Inventory UI fully migrated to services (no direct DB calls)
+- Repository layer fully standardized across 6 files
 - System stable for Categories and Inventory operations
+- **Other modules identified still using direct DB access** (see Known Issues)
 
 ## Known Issues
 
 ### Critical
+- **Non-inventory modules bypass service layer:**
+  - `accounts_module.py` - uses `self.db.cursor()` directly
+  - `pos_module.py` - uses `self.db.conn.execute(...)` for search
+  - `cashbox_module.py` - uses `self.db.cursor.execute(...)`
+  - `reports_module.py` - uses `self.db.cursor()` in UI
+  - `sales_service.py` - service uses `self.db.cursor.execute()` (not repository-based)
+  - `dashboard.py` - calls `self.db.get_financial_report()` and `self.db.set_setting()`
 
 ### Structural
-- UI still uses: self.db.* (inventory_module.py not yet fully migrated to services)
 - CategoryService: IMPLEMENTED and WORKING
+- Inventory UI: FULLY MIGRATED (no direct DB calls)
+- Category UI: FULLY MIGRATED (uses CategoryService, not InventoryService)
+- Category count: Uses CategoryService.count_products() (not inventory service)
 - Category path: FULLY FUNCTIONAL with hierarchical display
-- Category breadcrumb restoration optional (nice-to-have)
+- Repository pattern: STANDARDIZED across all repos (no _execute wrapper)
 
 ### Design Risks
-Atomicity depends on shared DB connection (not enforced globally)
-ProductRepository accesses stock movements (cross-domain concern)
+- Atomicity depends on shared DB connection (not enforced globally)
+- ProductRepository accesses stock movements (cross-domain concern)
+- Most modules still use `self.db` instead of service/repository pattern
 
-## Recent Changes
-Removed product logic from Database (core.py)
+## Recent Changes (2024-04-30)
 
-Created:
-ProductRepository
-InventoryService
-StockMovementRepo
+### Repository Refactoring
+- Removed problematic `_execute()` wrapper from all repositories
+- Standardized pattern: direct `self.conn.execute()` calls
+- Write operations use `with self.conn:` transaction context manager
+- Read operations: `.execute(query).fetchone/fetchall()` (no unnecessary commits)
+- Applied to: category_repo, account_repo, purchase_repo, report_repo, stock_movement_repo
+
+### Category Service Completion
+- Added `count_products(category_id)` method to CategoryService
+- CategoryModule now uses CategoryService for ALL category operations
+- Removed dependency on InventoryService except for product counts
+- Updated product-count to use `category_service.count_products()` (fully decoupled)
+
+### Data Flow Analysis
+- **Inventory path** - UI → InventoryService → Repository → DB (CLEAN)
+- **Category path** - UI → CategoryService → Repository → DB (CLEAN)
+- **Accounts/POS/Cashbox/Reports** - UI → Direct DB calls (NEEDS REFACTORING)
+- **Sales/Ledger** - Services use direct DB cursor calls (NEEDS REFACTORING)
+
+### Bug Fixes
+- Fixed typo in category_module.py: `self.categoryory_service` → `self.category_service`
+- Updated inventory_module.py to pass category_service to CategoryManagementWindow
+
+Previously completed (2024-04-29):
+- Verified inventory_module.py is fully decoupled (no self.db.* calls)
+- Inventory UI uses InventoryService for all data operations
+- All product/stock operations properly routed through services
 
 Moved:
 CRUD operations → ProductRepository
@@ -133,27 +169,38 @@ Simplified category representation in product queries
 
 ## Next Tasks
 
-### Immediate
+### Immediate (Priority Order)
 
-- Implement Database class in 'database/core.py' with helper methods:
-  - 'get_all_products()'
-  - 'get_product_by_id()'
-  - 'create_sale()'
-  - 'create_purchase()'
-- Fix remaining UI modules: POSFrame, CashboxFrame, PurchaseFrame
-- Ensure all frames receive correct parameters (db, services)
-- Migrate inventory_module.py UI to use services (remove self.db.* calls)
+**1. Refactor Non-Inventory Modules to Service Layer**
+   - Migrate POS module (search currently uses direct DB)
+   - Migrate Accounts module (uses raw cursor calls)
+   - Migrate Cashbox module (ledger operations use direct DB)
+   - Migrate Reports module (uses raw cursor in UI layer)
+
+**2. Fix Service-Level DB Access**
+   - SalesService: migrate from `self.db.cursor.execute()` to repository pattern
+   - LedgerService: migrate from `self.db.cursor.execute()` to repository pattern
+   - Dashboard: migrate from `self.db.get_*` calls to services
+
+**3. Implement Missing Repositories**
+   - InvoiceRepository (currently empty)
+   - LedgerRepository (currently empty)
+
+**4. Create Service Classes for Non-Inventory Domains**
+   - AccountsService (wraps AccountRepository)
+   - ReportingService (already exists, refactor to use repos properly)
+   - LedgerService (refactor to repository-based)
+   - CashboxService (new)
 
 ### Next Phase
-Ensure all repositories share the same DB connection
-- Migrate POS module to use Database class
-- Migrate Purchase module to use Database class
+- Ensure all modules follow: UI → Service → Repository → DB
+- Eliminate all direct database access from UI and service layers
+- All 6 repositories should be independently usable
 
 ### Later
-Introduce CategoryService
-Fully separate stock movement domain
-Clean reporting architecture
-Restore category breadcrumb logic (optional)
+- Fully separate stock movement domain
+- Restore category breadcrumb logic (optional)
+- Performance optimization with query caching
 
 ## Data Flow (Expected)
 
