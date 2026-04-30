@@ -2,16 +2,6 @@ class CategoryRepository:
     def __init__(self, conn):
         self.conn = conn
 
-    def _execute(self, query, params=None):
-        """Execute a query and return the cursor"""
-        cursor = self.conn.cursor()
-        if params:
-            cursor.execute(query, params)
-        else:
-            cursor.execute(query)
-        self.conn.commit()
-        return cursor
-
     def get_path(self, cat_id):
         """Returns 'Electrical > Lights > Bulbs' for a given category ID."""
         query = """
@@ -28,7 +18,7 @@ class CategoryRepository:
 
     def get_all_flat(self):
         """Get all categories with their full paths"""
-        cursor = self._execute("""
+        results = self.conn.execute("""
             WITH RECURSIVE category_tree AS (
                 SELECT id, name, parent_id, name as path, NULL as parent_name
                 FROM categories WHERE parent_id IS NULL
@@ -38,9 +28,7 @@ class CategoryRepository:
                 JOIN category_tree ct ON c.parent_id = ct.id
             )
             SELECT id, name, parent_id, path, parent_name FROM category_tree ORDER BY path
-        """)
-    
-        results = cursor.fetchall()
+        """).fetchall()
         formatted = []
         for row in results:
             if isinstance(row, tuple):
@@ -58,36 +46,36 @@ class CategoryRepository:
 
     def add(self, name, parent_id=None):
         """Add a new category"""
-        cursor = self._execute(
-            "INSERT INTO categories (name, parent_id) VALUES (?, ?)",
-            (name, parent_id)
-        )
-        return cursor.lastrowid
+        with self.conn:
+            cursor = self.conn.execute(
+                "INSERT INTO categories (name, parent_id) VALUES (?, ?)",
+                (name, parent_id)
+            )
+            return cursor.lastrowid
 
 
     def delete(self, category_id):
         """Delete a category (moves child products to parent)"""
         try:
-            cursor = self._execute("SELECT parent_id FROM categories WHERE id = ?", (category_id,))
-            row = cursor.fetchone()
+            row = self.conn.execute("SELECT parent_id FROM categories WHERE id = ?", (category_id,)).fetchone()
             
             if not row:
                 raise ValueError(f"Category with id {category_id} not found")
             
             parent_id = row[0] if row[0] else None
             
-            self._execute(
-                "UPDATE products SET category_id = ? WHERE category_id = ?",
-                (parent_id, category_id)
-            )
-            
-            self._execute(
-                "UPDATE categories SET parent_id = ? WHERE parent_id = ?",
-                (parent_id, category_id)
-            )
-            
-
-            self._execute("DELETE FROM categories WHERE id = ?", (category_id,))
+            with self.conn:
+                self.conn.execute(
+                    "UPDATE products SET category_id = ? WHERE category_id = ?",
+                    (parent_id, category_id)
+                )
+                
+                self.conn.execute(
+                    "UPDATE categories SET parent_id = ? WHERE parent_id = ?",
+                    (parent_id, category_id)
+                )
+                
+                self.conn.execute("DELETE FROM categories WHERE id = ?", (category_id,))
             
             print(f"Category {category_id} deleted successfully")
             
@@ -119,14 +107,12 @@ class CategoryRepository:
 
     def get_by_id(self, category_id):
         """Get category by ID"""
-        cursor = self._execute("SELECT * FROM categories WHERE id = ?", (category_id,))
-        return cursor.fetchone()
+        return self.conn.execute("SELECT * FROM categories WHERE id = ?", (category_id,)).fetchone()
 
-    def count_by_category(self, category_id):
+    def count_products(self, category_id):
         """Count products in a category"""
-        cursor = self._execute(
+        result = self.conn.execute(
             "SELECT COUNT(*) FROM products WHERE category_id = ?",
             (category_id,)
-        )
-        result = cursor.fetchone()
+        ).fetchone()
         return result[0] if result else 0

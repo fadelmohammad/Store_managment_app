@@ -7,9 +7,10 @@ from tkinter import messagebox
 class CategoryManagementWindow(ctk.CTkToplevel):
     """Professional category management window"""
 
-    def __init__(self, parent, inventory_service, refresh_callback):
+    def __init__(self, parent, category_service, inventory_service=None, refresh_callback=None):
         super().__init__(parent)
 
+        self.category_service = category_service
         self.inventory_service = inventory_service
         self.refresh_callback = refresh_callback
         self.cat_map = {}  # Store {category_path: category_id}
@@ -208,7 +209,7 @@ class CategoryManagementWindow(ctk.CTkToplevel):
         """Update category dropdowns and display"""
         try:
             print(" Refreshing category list...")
-            cats = self.inventory_service.get_categories()
+            cats = self.category_service.get_categories()
             print(f" Received {len(cats)} categories")
             
             if not cats:
@@ -303,8 +304,8 @@ class CategoryManagementWindow(ctk.CTkToplevel):
 
         # Product count
         try:
-            product_count = self.inventory_service.count_products_in_category(category["id"])
-        except:
+            product_count = self.category_service.count_products(category["id"])
+        except Exception:
             product_count = 0
 
         count_color = "#2ecc71" if product_count > 0 else "#7f8c8d"
@@ -331,7 +332,7 @@ class CategoryManagementWindow(ctk.CTkToplevel):
             parent_id = self.cat_map.get(parent_path)
 
         try:
-            self.inventory_service.add_category(name, parent_id)
+            self.category_service.add_category(name, parent_id)
             self.refresh_category_list()
             self.new_cat_name.delete(0, "end")
             self.parent_var.set("None (Root)")
@@ -367,7 +368,7 @@ class CategoryManagementWindow(ctk.CTkToplevel):
             return
 
         try:
-            self.categoryory_service.delete_category(cat_id)
+            self.category_service.delete_category(cat_id)
             self.refresh_category_list()
             self.delete_var.set("Select category...")
 
