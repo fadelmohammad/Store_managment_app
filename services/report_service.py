@@ -73,35 +73,57 @@ class ReportingService:
     # Inventory Reports
     # ==========================================
 
+    # report_service.py - في دالة get_inventory_report
+
     def get_inventory_report(self):
         """Get complete inventory report with all products"""
-        products = self.report_repo.get_all_products_for_report()
-        total_value = self.report_repo.get_total_inventory_value()
-        low_stock = self.report_repo.get_low_stock_products(5)
+        try:
+            print("🔍 Getting inventory report...")
+            
+            products = self.report_repo.get_all_products_for_report()
+            print(f"📊 Raw products from repo: {len(products) if products else 0}")
+            
+            total_value = self.report_repo.get_total_inventory_value()
+            print(f"💰 Total inventory value: {total_value}")
+            
+            low_stock = self.report_repo.get_low_stock_products(5)
+            
+            formatted_products = []
+            if products:
+                for p in products:
+                    if hasattr(p, 'keys'):
+                        formatted_products.append(dict(p))
+                    else:
+                        # تأكد من الأعمدة الصحيحة
+                        formatted_products.append({
+                            "id": p[0],
+                            "name": p[1] if len(p) > 1 else "Unknown",
+                            "price": float(p[3]) if len(p) > 3 and p[3] else 0,
+                            "cost": float(p[4]) if len(p) > 4 and p[4] else 0,
+                            "quantity": int(p[5]) if len(p) > 5 and p[5] else 0,
+                            "min_threshold": int(p[6]) if len(p) > 6 and p[6] else 0,
+                            "category": p[7] if len(p) > 7 and p[7] else "Uncategorized"
+                        })
+            
+            print(f"✅ Formatted {len(formatted_products)} products")
+            
+            return {
+                "products": formatted_products,
+                "total_value": total_value if total_value else 0,
+                "low_stock_count": len(low_stock) if low_stock else 0,
+                "low_stock_products": low_stock if low_stock else []
+            }
+        except Exception as e:
+            print(f"❌ Error in get_inventory_report: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "products": [],
+                "total_value": 0,
+                "low_stock_count": 0,
+                "low_stock_products": []
+            }
         
-        formatted_products = []
-        for p in products:
-            if hasattr(p, 'keys'):
-                formatted_products.append(dict(p))
-            else:
-                formatted_products.append({
-                    "id": p[0],
-                    "name": p[1],
-                    "sku": p[2] if len(p) > 2 else "",
-                    "price": p[3] if len(p) > 3 else 0,
-                    "cost": p[4] if len(p) > 4 else 0,
-                    "quantity": p[5] if len(p) > 5 else 0,
-                    "min_threshold": p[6] if len(p) > 6 else 0,
-                    "category": p[7] if len(p) > 7 else "Uncategorized"
-                })
-        
-        return {
-            "products": formatted_products,
-            "total_value": total_value,
-            "low_stock_count": len(low_stock),
-            "low_stock_products": low_stock
-        }
-
     def get_stock_movements(self, start_date=None, end_date=None, period="All Time"):
         """Get stock movements with optional date filter"""
         if period != "All Time":

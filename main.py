@@ -54,6 +54,19 @@ class StoreApp(ctk.CTk):
         seed_ledger_accounts(self.conn)
         insert_dummy_data(self.conn)
 
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM products")
+        product_count = cursor.fetchone()[0]
+        print(f"📊 Total products in database: {product_count}")
+
+        if product_count > 0:
+            cursor.execute("SELECT id, name, quantity, cost FROM products LIMIT 5")
+            products = cursor.fetchall()
+            for p in products:
+                print(f"  - Product: ID={p[0]}, Name={p[1]}, Qty={p[2]}, Cost={p[3]}")
+        else:
+            print("⚠️ No products found! Please add products first.")
+
         # --- THEME & WINDOW CONFIG ---
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")

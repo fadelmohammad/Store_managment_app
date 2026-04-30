@@ -70,16 +70,38 @@ class ReportRepository:
     # Inventory Reports
     # ==========================================
 
+ 
+    # report_repo.py - في دالة get_all_products_for_report
+
     def get_all_products_for_report(self):
         """Get all products with full details for inventory report"""
-        cursor = self._execute("""
-            SELECT p.id, p.name, p.sku, p.price, p.cost, p.quantity, p.min_threshold,
-                   c.name as category_name
-            FROM products p
-            LEFT JOIN categories c ON p.category_id = c.id
-            ORDER BY p.name
-        """)
-        return cursor.fetchall()
+        try:
+            cursor = self._execute("""
+                SELECT 
+                    p.id, 
+                    p.name,  
+                    p.price, 
+                    p.cost, 
+                    p.quantity, 
+                    p.min_threshold,
+                    c.name as category_name
+                FROM products p
+                LEFT JOIN categories c ON p.category_id = c.id
+                ORDER BY p.name
+            """)
+            
+            results = cursor.fetchall()
+            print(f"📊 get_all_products_for_report: found {len(results)} products")
+            
+            # طباعة أول منتج للتأكد
+            if results:
+                print(f"  First product sample: {results[0]}")
+            
+            return results
+        except Exception as e:
+            print(f"❌ Error in get_all_products_for_report: {e}")
+            return []
+    
 
     def get_total_inventory_value(self):
         """Calculate total inventory value (sum of quantity * cost)"""
@@ -93,7 +115,7 @@ class ReportRepository:
     def get_low_stock_products(self, threshold=5):
         """Get products with quantity below threshold"""
         cursor = self._execute("""
-            SELECT p.id, p.name, p.sku, p.quantity, p.min_threshold
+            SELECT p.id, p.name, p.quantity, p.min_threshold
             FROM products p
             WHERE p.quantity <= ?
             ORDER BY p.quantity ASC
