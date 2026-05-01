@@ -17,12 +17,15 @@ def format_compact_path(path):
     return f"{parts[0][:3]}.. > {parts[-1]}"
 
 class POSFrame(ctk.CTkFrame):
-    def __init__(self, parent, app, db, sales_service):
+    def __init__(self, parent, app, db, sales_service, account_service, inventory_service):
         super().__init__(parent)
         self.app = app
+        # Kept for compatibility, but POS UI should not run SQL directly.
         self.db = db
         self.cart = []
         self.sales_service = sales_service
+        self.account_service = account_service
+        self.inventory_service = inventory_service
         self.customer_map = {}
         self.selected_customer_id = None
 
@@ -159,44 +162,33 @@ class POSFrame(ctk.CTkFrame):
         for widget in self.results_list.winfo_children():
             widget.destroy()
 
-        query = """
-            WITH RECURSIVE cat_tree(id, path) AS (
-                SELECT id, name FROM categories WHERE parent_id IS NULL
-                UNION ALL
-                SELECT c.id, ct.path || ' > ' || c.name FROM categories c 
-                JOIN cat_tree ct ON c.parent_id = ct.id
-            )
-            SELECT p.*, ct.path 
-            FROM products p
-            LEFT JOIN cat_tree ct ON p.category_id = ct.id
-            WHERE p.name LIKE ? OR ct.path LIKE ?
-        """
-        matches = self.db.conn.execute(query, (f'%{term}%', f'%{term}%')).fetchall()
+        matches = self.inventory_service.search_products(term) if term else []
 
         for p in matches:
             # UI Feedback: Change color if stock is low
-            if p['quantity'] <= p['min_threshold']:
+            quantity = p.get("quantity", 0) or 0
+            min_threshold = p.get("min_threshold", 0) or 0
+
+            if quantity <= min_threshold:
                 color = "#e67e22"
-                if p['quantity'] == 0:
-                    color = '#FF0000'
-            else: color = ("black", "white")
-            
-            # Inside your search results loop:
-            formatted_cat = format_compact_path(p['path'])
-            
-            # We combine Category and Stock on the second line
-            sub_text = f"{formatted_cat}\nStock: {p['quantity']}"
-            
+                if quantity == 0:
+                    color = "#FF0000"
+            else:
+                color = ("black", "white")
+
+            formatted_cat = format_compact_path(p.get("path"))
+            sub_text = f"{formatted_cat}\nStock: {quantity}"
+
             btn = ctk.CTkButton(
-                self.results_list, 
-                text=f"{p['name']}\n{sub_text}", # \n creates the second line
-                height=60,                       # Increased height for two lines
-                font=("Arial", 13),              # Standard font
-                fg_color="transparent", 
-                text_color=color, 
-                anchor="center",                      # Align text to the center
+                self.results_list,
+                text=f"{p.get('name','')}\n{sub_text}",
+                height=60,
+                font=("Arial", 13),
+                fg_color="transparent",
+                text_color=color,
+                anchor="center",
                 hover_color=("#DBDBDB", "#2B2B2B"),
-                command=lambda prod=p: self.open_quantity_popup(prod)
+                command=lambda prod=p: self.open_quantity_popup(prod),
             )
             btn.pack(fill="x", pady=2, padx=5)
 
@@ -222,15 +214,15 @@ class POSFrame(ctk.CTkFrame):
         self.cust_results_list.pack_forget()
 
     def load_customers(self):
-        all_customers = self.app.account_repo.get_by_role("Customer")
-        self.customer_map = {c["name"]: c["id"] for c in all_customers}
-        
+        all_customers = self.account_service.get_by_role("Customer") or []
+        self.customer_map = {c["name"]: c["id"] for c in all_customers if c.get("name") is not None}
+
         default_name = "Cash Customer"
         for name in self.customer_map.keys():
             if "cash" in name.lower():
                 default_name = name
                 break
-        
+
         self.cust_search_var.set(default_name)
         self.selected_customer_id = self.customer_map.get(default_name)
 

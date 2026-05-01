@@ -9,7 +9,7 @@ class ReportsFrame(ctk.CTkFrame):
     def __init__(self, parent, app, db):
         super().__init__(parent)
         self.app = app
-        self.db = db  # Still needed for some direct queries, will remove gradually
+        # All report data must come via report_service (UI → service → repo → DB).
 
         # --- NAVIGATION BAR ---
         nav_bar = ctk.CTkFrame(self, fg_color="transparent")
@@ -205,49 +205,47 @@ class ReportsFrame(ctk.CTkFrame):
 
    # reports_module.py - أصلح دالة load_invoices
 
+
     def load_invoices(self):
-        """Loads and filters the invoice list."""
-        for i in self.inv_tree.get_children(): 
+        """Loads and filters the invoice list via report_service (UI → service → repo → DB)."""
+        for i in self.inv_tree.get_children():
             self.inv_tree.delete(i)
-        
+
         period = self.period_var.get()
-        if period == "Today":
-            date_clause = "WHERE date >= date('now')"
-        elif period == "Last 7 Days":
-            date_clause = "WHERE date >= date('now', '-7 days')"
-        elif period == "This Month":
-            date_clause = "WHERE date >= date('now', 'start of month')"
-        else:
-            date_clause = ""
+        invoices = self.app.report_service.get_invoices(period)
 
-        query = f"""
-            SELECT i.id, i.type, i.date, a.name AS partner_name, i.total, i.payment_method, i.status
-            FROM invoices i
-            LEFT JOIN accounts a ON i.partner_id = a.id
-            {date_clause}
-            ORDER BY i.id DESC
-        """
-
-        cursor = self.db.cursor()
-        cursor.execute(query)
-        rows = cursor.fetchall()
-        
-        for r in rows:
-            # ✅ استخدام الوصول المباشر بدلاً من .get()
-            if hasattr(r, 'keys'):
-                # r هو sqlite3.Row
-                partner_name = r['partner_name'] if r['partner_name'] else "Walk-in"
-                self.inv_tree.insert("", "end", values=(
-                    r['id'], r['type'], r['date'], partner_name, 
-                    f"€{r['total']:.2f}", r['payment_method'], r['status']
-                ))
+        for r in invoices or []:
+            if hasattr(r, "keys"):
+                partner_name = r["partner_name"] if r["partner_name"] else "Walk-in"
+                self.inv_tree.insert(
+                    "",
+                    "end",
+                    values=(
+                        r["id"],
+                        r["type"],
+                        r["date"],
+                        partner_name,
+                        f"€{r['total']:.2f}",
+                        r["payment_method"],
+                        r["status"],
+                    ),
+                )
             else:
-                # r هو tuple
+                # Fallback for unexpected row shapes
                 partner_name = r[3] if r[3] else "Walk-in"
-                self.inv_tree.insert("", "end", values=(
-                    r[0], r[1], r[2], partner_name, 
-                    f"€{r[4]:.2f}", r[5], r[6]
-                ))
+                self.inv_tree.insert(
+                    "",
+                    "end",
+                    values=(
+                        r[0],
+                        r[1],
+                        r[2],
+                        partner_name,
+                        f"€{r[4]:.2f}",
+                        r[5],
+                        r[6],
+                    ),
+                )
 
 
 

@@ -9,6 +9,7 @@ class CashboxFrame(ctk.CTkFrame):
     def __init__(self, parent, app, db, ledger_service):
         super().__init__(parent)
         self.app = app
+        # Keep `db` only for compatibility, but Cashbox UI should not query SQL directly.
         self.db = db
         self.ledger = ledger_service
         self.expected_cash = 0.0
@@ -93,39 +94,26 @@ class CashboxFrame(ctk.CTkFrame):
     # LOGIC & DATA
     # ==========================================
     def refresh_data(self):
-        """Calculates expected cash from the Ledger and updates the audit log."""
+        """UI refresh. All data comes via ledger_service (UI → service → repo → DB)."""
         try:
-            # 1. Fetch Expected Cash Balance from Ledger
-            query = """
-                SELECT SUM(debit) - SUM(credit) as balance 
-                FROM journal_lines l
-                JOIN accounts_ledger a ON l.account_id = a.id
-                WHERE a.name = 'Cash'
-            """
-            result = self.db.cursor.execute(query).fetchone()
-            self.expected_cash = result["balance"] if result["balance"] else 0.0
+            self.expected_cash = float(self.ledger.get_cash_balance() or 0.0)
             self.exp_label.configure(text=f"€{self.expected_cash:,.2f}")
 
-            # 2. Update Treeview (Audit Log)
             for i in self.tree.get_children():
                 self.tree.delete(i)
 
-            log_query = """
-                SELECT e.date, e.description, l.debit, l.credit
-                FROM journal_entries e
-                JOIN journal_lines l ON e.id = l.entry_id
-                JOIN accounts_ledger a ON l.account_id = a.id
-                WHERE a.name = 'Cash'
-                ORDER BY e.id DESC LIMIT 20
-            """
-            logs = self.db.cursor.execute(log_query).fetchall()
+            logs = self.ledger.get_recent_cash_transactions(limit=20) or []
             for log in logs:
-                self.tree.insert("", "end", values=(
-                    log["date"],
-                    log["description"],
-                    f"€{log['debit']:.2f}",
-                    f"€{log['credit']:.2f}"
-                ))
+                self.tree.insert(
+                    "",
+                    "end",
+                    values=(
+                        log.get("date"),
+                        log.get("description"),
+                        f"€{float(log.get('debit') or 0.0):.2f}",
+                        f"€{float(log.get('credit') or 0.0):.2f}",
+                    ),
+                )
         except Exception as e:
             print(f"Cashbox Refresh Error: {e}")
 
@@ -157,10 +145,8 @@ class CashboxFrame(ctk.CTkFrame):
             self.ledger.create_entry(
                 description=f"Cashbox: {desc}",
                 reference_id="MANUAL",
-                lines=lines
+                lines=lines,
             )
-
-            self.db.conn.commit()
 
             # Reset UI
             self.amt_entry.delete(0, 'end')

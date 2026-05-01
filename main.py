@@ -18,6 +18,7 @@ from database.core import Database
 from services.ledger_service import LedgerService
 from services.sales_service import SalesService
 from services.purchase_service import PurchaseService
+from services.accounts_service import AccountService
 
 # UI Module Imports
 from dashboard import DashboardFrame
@@ -50,6 +51,7 @@ class StoreApp(ctk.CTk):
         
         self.setting_repo = SettingRepository(self.conn)
         self.account_repo = AccountRepository(self.conn)
+        self.account_service = AccountService(self.account_repo)
         self.report_service = ReportingService(self.report_repo,self.product_repo,self.stock_repo)  
 
         create_tables(self.conn)
@@ -111,9 +113,16 @@ class StoreApp(ctk.CTk):
             "dashboard": DashboardFrame(self.container, self),           
             "inventory": InventoryFrame(self.container, self),           
             # "pos": POSFrame(self.container, self, self.db, self.sales_service),  
-            "accounts": AccountsFrame(self.container, self, self.db),           
+            "accounts": AccountsFrame(self.container, self, self.account_service),           
             # "cashbox": CashboxFrame(self.container, self, self.db, self.ledger_service),  
-            "purchase": PurchaseFrame(self.container, self, self.db, self.purchase_service),  
+            "purchase": PurchaseFrame(
+                self.container,
+                self,
+                self.db,
+                self.purchase_service,
+                self.account_service,
+                self.inventory_service,
+            ),
             "reports": ReportsFrame(self.container, self, self.db),     
     }
 

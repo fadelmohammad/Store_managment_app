@@ -17,6 +17,25 @@ class ProductRepository:
             """
         ).fetchall()
 
+    def search_products(self, term):
+        """Search products by name OR category path (recursive)."""
+        query = """
+            WITH RECURSIVE cat_tree(id, path) AS (
+                SELECT id, name FROM categories WHERE parent_id IS NULL
+                UNION ALL
+                SELECT c.id, ct.path || ' > ' || c.name
+                FROM categories c
+                JOIN cat_tree ct ON c.parent_id = ct.id
+            )
+            SELECT p.*, ct.path
+            FROM products p
+            LEFT JOIN cat_tree ct ON p.category_id = ct.id
+            WHERE p.name LIKE ? OR ct.path LIKE ?
+            ORDER BY p.id
+        """
+        like = f"%{term}%"
+        return self.conn.execute(query, (like, like)).fetchall()
+
     def get_by_id(self, product_id):
         return self.conn.execute(
             "SELECT * FROM products WHERE id = ?", (product_id,)

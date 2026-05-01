@@ -35,6 +35,22 @@ class InventoryService:
         
         return formatted_products
 
+    def search_products(self, term: str):
+        """
+        POS needs a 'path' string for category breadcrumb (recursive tree),
+        so we return the same shape as ProductRepository.search_products(),
+        but converted to dicts.
+        """
+        term = (term or "").strip()
+        if not term:
+            return []
+
+        rows = self.product_repo.search_products(term)
+        results = []
+        for r in rows:
+            results.append(dict(r) if hasattr(r, "keys") else r)
+        return results
+
     def get_product_by_id(self, product_id):
         """Fetches a specific product based on its ID"""
         product = self.product_repo.get_by_id(product_id)
