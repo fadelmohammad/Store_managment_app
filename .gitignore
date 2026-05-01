@@ -7,3 +7,4 @@ venv/
 Thumbs.db
 *.log
 .sixth
+.qodo
