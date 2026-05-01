@@ -9,7 +9,7 @@ class DashboardFrame(ctk.CTkFrame):
     def __init__(self, parent, app):
         super().__init__(parent)
         self.app = app
-        self.db = app.db
+        self.db = app.conn
 
         # Local state for exchange rate
         self.current_exchange_rate = getattr(self.app, 'exchange_rate', 15000)

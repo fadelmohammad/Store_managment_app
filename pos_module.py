@@ -17,11 +17,10 @@ def format_compact_path(path):
     return f"{parts[0][:3]}.. > {parts[-1]}"
 
 class POSFrame(ctk.CTkFrame):
-    def __init__(self, parent, app, db, sales_service, account_service, inventory_service):
+    def __init__(self, parent, app,  sales_service, account_service, inventory_service):
         super().__init__(parent)
         self.app = app
         # Kept for compatibility, but POS UI should not run SQL directly.
-        self.db = db
         self.cart = []
         self.sales_service = sales_service
         self.account_service = account_service

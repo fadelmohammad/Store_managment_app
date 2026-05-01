@@ -14,7 +14,6 @@ from services.inventory_service import InventoryService
 from services.category_service import CategoryService
 from services.report_service import ReportingService
 
-from database.core import Database
 from services.ledger_service import LedgerService
 from services.sales_service import SalesService
 from services.purchase_service import PurchaseService
@@ -37,8 +36,6 @@ class StoreApp(ctk.CTk):
         # --- DB INIT ---
         self.db_connection = DatabaseConnection()
         self.conn = self.db_connection.get_connection()
-
-        self.db = self.conn
 
         self.stock_repo = StockMovementRepository(self.conn)
         self.product_repo = ProductRepository(self.conn)
@@ -80,8 +77,8 @@ class StoreApp(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
         # Service Layer (Business Logic)
-        self.ledger_service = LedgerService(self.db)
-        self.sales_service = SalesService(self.db, self.ledger_service)
+        self.ledger_service = LedgerService(self.conn)
+        self.sales_service = SalesService(self.conn, self.ledger_service)
         # self.purchase_service = PurchaseService(self.db, self.ledger_service)
         self.purchase_service = PurchaseService(self.purchase_repo,self.product_repo,self.stock_repo,self.inventory_service,self.ledger_service,self.account_repo)
 
@@ -112,18 +109,18 @@ class StoreApp(ctk.CTk):
         self.frames = {
             "dashboard": DashboardFrame(self.container, self),           
             "inventory": InventoryFrame(self.container, self),           
-            # "pos": POSFrame(self.container, self, self.db, self.sales_service),  
+            "pos": POSFrame(self.container, self, self.sales_service, self.account_service, self.inventory_service),  
             "accounts": AccountsFrame(self.container, self, self.account_service),           
             # "cashbox": CashboxFrame(self.container, self, self.db, self.ledger_service),  
             "purchase": PurchaseFrame(
                 self.container,
                 self,
-                self.db,
+                self.conn,
                 self.purchase_service,
                 self.account_service,
                 self.inventory_service,
             ),
-            "reports": ReportsFrame(self.container, self, self.db),     
+            "reports": ReportsFrame(self.container, self, self.conn),     
     }
 
     # ==========================================
