@@ -1,4 +1,6 @@
 
+import logging
+
 class StockMovementRepository:
     def __init__(self, conn):
         self.conn = conn
@@ -11,9 +13,9 @@ class StockMovementRepository:
                     INSERT INTO stock_movements (product_id, movement_type, quantity, date, reason)
                     VALUES (?, ?, ?, datetime('now'), ?)
                 """, (product_id, movement_type, quantity, reason))
-            print(f" Stock movement recorded: Product {product_id}, {movement_type}, {quantity}")
+            logging.info(f"Stock movement recorded: Product {product_id}, {movement_type}, {quantity}")
         except Exception as e:
-            print(f" Error inserting movement: {e}")
+            logging.error(f"Error inserting movement: {e}")
             raise
 
     def get_movements(self, product_id):
@@ -26,5 +28,5 @@ class StockMovementRepository:
                 ORDER BY date DESC
             """, (product_id,)).fetchall()
         except Exception as e:
-            print(f" Error getting movements: {e}")
+            logging.error(f"Error getting movements: {e}")
             return []

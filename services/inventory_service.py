@@ -16,15 +16,7 @@ class InventoryService:
         
         formatted_products = []
         for p in products:
-            product = dict(p) if hasattr(p, 'keys') else {
-                "id": p[0],
-                "name": p[1],
-                "category_id": p[2],
-                "price": p[3],
-                "cost": p[4],
-                "quantity": p[5],
-                "min_threshold": p[6] if len(p) > 6 else 0
-            }
+            product = dict(p)
             
             if product.get("category_id"):
                 product["category"] = self.category_service.get_category_path(product["category_id"])
@@ -55,18 +47,7 @@ class InventoryService:
         """Fetches a specific product based on its ID"""
         product = self.product_repo.get_by_id(product_id)
         if product:
-            if hasattr(product, 'keys'):
-                product_dict = dict(product)
-            else:
-                product_dict = {
-                    "id": product[0],
-                    "name": product[1],
-                    "category_id": product[2],
-                    "price": product[3],
-                    "cost": product[4],
-                    "quantity": product[5],
-                    "min_threshold": product[6] if len(product) > 6 else 0
-                }
+            product_dict = dict(product)
             
             if product_dict.get("category_id"):
                 product_dict["category_path"] = self.category_service.get_category_path(product_dict["category_id"])
@@ -109,10 +90,10 @@ class InventoryService:
                 raise ValueError("Category ID is required")
             
             self.category_service.delete_category(category_id)
-            print(f" Category {category_id} deleted via InventoryService")
+            logging.info(f"Category {category_id} deleted via InventoryService")
             
         except Exception as e:
-            print(f" Error in InventoryService.delete_category: {e}")
+            logging.error(f"Error in InventoryService.delete_category: {e}")
             raise
 
     def count_products_in_category(self, category_id):
@@ -124,10 +105,10 @@ class InventoryService:
             if hasattr(self.category_repo, 'count_by_category'):
                 return self.category_repo.count_by_category(category_id)
             else:
-                print(" count_by_category method not found in category_repo")
+                logging.warning("count_by_category method not found in category_repo")
                 return 0
         except Exception as e:
-            print(f" Error in count_products_in_category: {e}")
+            logging.error(f"Error in count_products_in_category: {e}")
             return 0
 
     def get_category_history(self, category_path):

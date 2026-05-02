@@ -121,8 +121,12 @@ class PurchaseFrame(ctk.CTkFrame):
         rate = float(self.app.exchange_rate)
 
         try:
-            cost = float(self.cost_entry.get())
-            qty = float(self.qty_entry.get())
+            cost_str = self.cost_entry.get().strip()
+            qty_str = self.qty_entry.get().strip()
+            if not cost_str or not qty_str:
+                raise ValueError("Cost and quantity required")
+            cost = float(cost_str)
+            qty = float(qty_str)
             if qty <= 0:
                 raise ValueError("Quantity must be > 0")
             if cost < 0:
@@ -154,8 +158,14 @@ class PurchaseFrame(ctk.CTkFrame):
                 ),
             )
             self.update_total()
-        except Exception:
-            messagebox.showerror("Error", "Check cost and quantity inputs")
+        except ValueError as e:
+            messagebox.showerror("Input Error", str(e))
+        except sqlite3.Error as e:
+            logging.error(f"Database error in add_to_cart: {e}")
+            messagebox.showerror("DB Error", "Database issue - check logs")
+        except Exception as e:
+            logging.error(f"Unexpected error in add_to_cart: {e}")
+            messagebox.showerror("Error", "Unexpected error - check logs")
 
     def update_total(self):
         total = sum(item["price"] * item["qty"] for item in self.cart)

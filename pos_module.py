@@ -20,7 +20,6 @@ class POSFrame(ctk.CTkFrame):
     def __init__(self, parent, app,  sales_service, account_service, inventory_service):
         super().__init__(parent)
         self.app = app
-        # Kept for compatibility, but POS UI should not run SQL directly.
         self.cart = []
         self.sales_service = sales_service
         self.account_service = account_service
