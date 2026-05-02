@@ -1,3 +1,5 @@
+import logging
+
 class CategoryService:
     def __init__(self, category_repo):
         self.category_repo = category_repo
@@ -45,10 +47,10 @@ class CategoryService:
             
  
             self.category_repo.delete(category_id)
-            print(f" Category '{category_name}' (ID: {category_id}) deleted successfully")
+            logging.info(f"Category '{category_name}' (ID: {category_id}) deleted successfully")
             
         except Exception as e:
-            print(f" Error in delete_category: {e}")
+            logging.error(f"Error in delete_category: {e}")
             raise
 
     def get_category_history(self, category_path):

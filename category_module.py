@@ -1,7 +1,9 @@
 # category_module.py
 
 import customtkinter as ctk
+import logging
 from tkinter import messagebox
+import sqlite3
 
 
 class CategoryManagementWindow(ctk.CTkToplevel):
@@ -208,12 +210,12 @@ class CategoryManagementWindow(ctk.CTkToplevel):
     def refresh_category_list(self):
         """Update category dropdowns and display"""
         try:
-            print(" Refreshing category list...")
+            logging.debug("Refreshing category list...")
             cats = self.category_service.get_categories()
-            print(f" Received {len(cats)} categories")
+            logging.debug(f"Received {len(cats)} categories")
             
             if not cats:
-                print(" No categories found")
+                logging.info("No categories found")
                 self.parent_dropdown.configure(values=["None (Root)"])
                 self.delete_dropdown.configure(values=["No categories"])
                 self._display_categories([])
@@ -224,10 +226,10 @@ class CategoryManagementWindow(ctk.CTkToplevel):
                 path = cat.get("path", cat.get("name", "Unknown"))
                 cat_id = cat.get("id")
                 self.cat_map[path] = cat_id
-                print(f"  - Mapped: {path} -> ID: {cat_id}")
+                logging.debug(f"Mapped: {path} -> ID: {cat_id}")
             
             paths = list(self.cat_map.keys())
-            print(f" Paths: {paths}")
+            logging.debug(f"Paths: {paths}")
             
             # Update dropdowns
             dropdown_values = ["None (Root)"] + paths
@@ -238,7 +240,7 @@ class CategoryManagementWindow(ctk.CTkToplevel):
             self._display_categories(cats)
             
         except Exception as e:
-            print(f" Error in refresh_category_list: {e}")
+            logging.error(f"Error in refresh_category_list: {e}")
             import traceback
             traceback.print_exc()
 
@@ -304,8 +306,12 @@ class CategoryManagementWindow(ctk.CTkToplevel):
 
         # Product count
         try:
-            product_count = self.category_service.count_products(category["id"])
-        except Exception:
+            product_count = self.category_service.count_products_in_category(category["id"])
+        except sqlite3.Error as e:
+            logging.error(f"DB error counting products for category {category.get('id', 'unknown')}: {e}")
+            product_count = 0
+        except Exception as e:
+            logging.error(f"Unexpected error counting products: {e}")
             product_count = 0
 
         count_color = "#2ecc71" if product_count > 0 else "#7f8c8d"
@@ -340,7 +346,8 @@ class CategoryManagementWindow(ctk.CTkToplevel):
             if self.refresh_callback:
                 self.refresh_callback()
 
-            self._show_info("Success", f" Category '{name}' added successfully")
+            logging.info(f"Category '{name}' added successfully")
+            self._show_info("Success", f"Category '{name}' added successfully")
         except Exception as e:
             self._show_error("Error", f"Failed to add category:\n{str(e)}")
 

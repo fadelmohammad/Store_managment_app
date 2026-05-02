@@ -1,3 +1,5 @@
+import logging
+
 class CategoryRepository:
     def __init__(self, conn):
         self.conn = conn
@@ -77,10 +79,10 @@ class CategoryRepository:
                 
                 self.conn.execute("DELETE FROM categories WHERE id = ?", (category_id,))
             
-            print(f"Category {category_id} deleted successfully")
+            logging.info(f"Category {category_id} deleted successfully")
             
         except Exception as e:
-            print(f"Error deleting category {category_id}: {e}")
+            logging.error(f"Error deleting category {category_id}: {e}")
             raise
 
     def get_history(self, category_path):
@@ -102,12 +104,15 @@ class CategoryRepository:
             ORDER BY h.date DESC
         """
 
-        return self.conn.execute(query, (category_path.split(" > ")[-1],)).fetchall()
+        cat_name = category_path.split(" > ")[-1] if category_path else ''
+        rows = self.conn.execute(query, (cat_name,)).fetchall()
+        return [dict(row) for row in rows]
 
 
     def get_by_id(self, category_id):
         """Get category by ID"""
-        return self.conn.execute("SELECT * FROM categories WHERE id = ?", (category_id,)).fetchone()
+        row = self.conn.execute("SELECT * FROM categories WHERE id = ?", (category_id,)).fetchone()
+        return dict(row) if row else None
 
     def count_products(self, category_id):
         """Count products in a category"""
