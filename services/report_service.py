@@ -1,4 +1,5 @@
 
+import logging
 from datetime import datetime
 
 
@@ -78,34 +79,18 @@ class ReportingService:
     def get_inventory_report(self):
         """Get complete inventory report with all products"""
         try:
-            print("🔍 Getting inventory report...")
+            logging.info("Getting inventory report...")
             
             products = self.report_repo.get_all_products_for_report()
-            print(f"📊 Raw products from repo: {len(products) if products else 0}")
+            logging.debug(f"Raw products from repo: {len(products) if products else 0}")
             
             total_value = self.report_repo.get_total_inventory_value()
-            print(f"💰 Total inventory value: {total_value}")
+            logging.info(f"Total inventory value: {total_value}")
             
             low_stock = self.report_repo.get_low_stock_products(5)
             
-            formatted_products = []
-            if products:
-                for p in products:
-                    if hasattr(p, 'keys'):
-                        formatted_products.append(dict(p))
-                    else:
-                        # تأكد من الأعمدة الصحيحة
-                        formatted_products.append({
-                            "id": p[0],
-                            "name": p[1] if len(p) > 1 else "Unknown",
-                            "price": float(p[3]) if len(p) > 3 and p[3] else 0,
-                            "cost": float(p[4]) if len(p) > 4 and p[4] else 0,
-                            "quantity": int(p[5]) if len(p) > 5 and p[5] else 0,
-                            "min_threshold": int(p[6]) if len(p) > 6 and p[6] else 0,
-                            "category": p[7] if len(p) > 7 and p[7] else "Uncategorized"
-                        })
-            
-            print(f"✅ Formatted {len(formatted_products)} products")
+            formatted_products = [dict(p) for p in products]
+            logging.debug(f"Formatted {len(formatted_products)} products")
             
             return {
                 "products": formatted_products,
@@ -114,9 +99,7 @@ class ReportingService:
                 "low_stock_products": low_stock if low_stock else []
             }
         except Exception as e:
-            print(f"❌ Error in get_inventory_report: {e}")
-            import traceback
-            traceback.print_exc()
+            logging.error(f"Error in get_inventory_report: {e}", exc_info=True)
             return {
                 "products": [],
                 "total_value": 0,
@@ -159,15 +142,7 @@ class ReportingService:
             # Get expense breakdown
             expense_breakdown = self.report_repo.get_expense_breakdown(date_clause)
             
-            formatted_expenses = []
-            for exp in expense_breakdown:
-                if hasattr(exp, 'keys'):
-                    formatted_expenses.append(dict(exp))
-                else:
-                    formatted_expenses.append({
-                        "description": exp[0],
-                        "total": exp[1] if len(exp) > 1 else 0
-                    })
+            formatted_expenses = [dict(exp) for exp in expense_breakdown]
             
             return {
                 "sales": revenue,
@@ -179,7 +154,7 @@ class ReportingService:
             }
             
         except Exception as e:
-            print(f"Error in get_financial_report: {e}")
+            logging.error(f"Error in get_financial_report: {e}", exc_info=True)
             return {
                 "sales": 0.0,
                 "cogs": 0.0,
@@ -207,16 +182,8 @@ class ReportingService:
             period_type="day" if group_by == "day" else "month"
         )
         
-        days = []
-        sales = []
-        for row in revenue_data:
-            if hasattr(row, 'keys'):
-                days.append(row['period'])
-                sales.append(row['total'] or 0)
-            else:
-                days.append(row[0])
-                sales.append(row[1] if len(row) > 1 else 0)
-        
+        days = [row['period'] for row in revenue_data]
+        sales = [row['total'] or 0 for row in revenue_data]
         return days, sales
 
     # ==========================================

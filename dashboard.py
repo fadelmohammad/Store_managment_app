@@ -3,6 +3,7 @@
 import customtkinter as ctk
 from datetime import datetime
 from tkinter import messagebox
+from safe_eval import safe_eval
 
 
 class DashboardFrame(ctk.CTkFrame):
@@ -128,11 +129,14 @@ class DashboardFrame(ctk.CTkFrame):
 
     def calculate(self, event=None):
         try:
-            res = eval(self.calc_ent.get())
+            expr = self.calc_ent.get().strip()
+            if not expr:
+                return
+            res = safe_eval(expr)
             self.calc_res.configure(text=f"= {res:,.2f}")
             self.calc_ent.delete(0, 'end')
-        except:
-            self.calc_res.configure(text="Error", text_color="#e74c3c")
+        except Exception as e:
+            self.calc_res.configure(text=f"Error: {str(e)[:20]}", text_color="#e74c3c")
 
     def update_ex(self):
         try:

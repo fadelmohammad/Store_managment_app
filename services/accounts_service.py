@@ -9,11 +9,12 @@ class AccountService:
         row = self.account_repo.get_by_id(account_id)
         if not row:
             return None
-        # sqlite3.Row supports dict(row) via iteration over keys
+        # sqlite3.Row supports dict(row)
         try:
             return dict(row)
-        except Exception:
-            return row
+        except sqlite3.Error as e:
+            logging.error(f"Database error getting account {account_id}: {e}")
+            return None
 
     def get_accounts(self, role: str = "All", search: str = "") -> List[Dict]:
         """

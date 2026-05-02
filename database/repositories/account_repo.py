@@ -1,5 +1,7 @@
 # account_repo.py
 
+import logging
+
 class AccountRepository:
     def __init__(self, conn):
         self.conn = conn
@@ -18,26 +20,13 @@ class AccountRepository:
                 "SELECT * FROM accounts WHERE role = ? ORDER BY name", (role,)
             ).fetchall()
 
-            print(f"🔍 get_by_role('{role}'): found {len(results)} accounts")
+            logging.debug(f"get_by_role('{role}'): found {len(results)} accounts")
 
             # Convert to list of dictionaries for easier access
-            formatted = []
-            for row in results:
-                if hasattr(row, 'keys'):
-                    formatted.append(dict(row))
-                else:
-                    formatted.append({
-                        "id": row[0],
-                        "name": row[1],
-                        "role": row[2],
-                        "phone": row[3] if len(row) > 3 else "",
-                        "email": row[4] if len(row) > 4 else "",
-                        "address": row[5] if len(row) > 5 else "",
-                        "balance": row[6] if len(row) > 6 else 0
-                    })
+            formatted = [dict(row) for row in results]
             return formatted
         except Exception as e:
-            print(f"❌ Error in get_by_role: {e}")
+            logging.error(f"Error in get_by_role: {e}")
             return []
 
     def get_all(self):
@@ -47,23 +36,10 @@ class AccountRepository:
                 "SELECT * FROM accounts ORDER BY name"
             ).fetchall()
 
-            formatted = []
-            for row in results:
-                if hasattr(row, "keys"):
-                    formatted.append(dict(row))
-                else:
-                    formatted.append({
-                        "id": row[0],
-                        "name": row[1],
-                        "role": row[2],
-                        "phone": row[3] if len(row) > 3 else "",
-                        "email": row[4] if len(row) > 4 else "",
-                        "address": row[5] if len(row) > 5 else "",
-                        "balance": row[6] if len(row) > 6 else 0
-                    })
+            formatted = [dict(row) for row in results]
             return formatted
         except Exception as e:
-            print(f"❌ Error in get_all: {e}")
+            logging.error(f"Error in get_all: {e}")
             return []
 
     def add(self, name, role, phone, email, address):
@@ -94,5 +70,10 @@ class AccountRepository:
 
     def delete(self, account_id):
         """Removes the account record from the database."""
-        with self.conn:
-            self.conn.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
+        try:
+            with self.conn:
+                self.conn.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
+            logging.info(f"Account {account_id} deleted successfully")
+        except Exception as e:
+            logging.error(f"Error deleting account {account_id}: {e}")
+            raise

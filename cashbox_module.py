@@ -1,16 +1,16 @@
 # cashbox_module.py
 
 import customtkinter as ctk
+import logging
 from tkinter import ttk, messagebox
 from datetime import datetime
 
 
 class CashboxFrame(ctk.CTkFrame):
-    def __init__(self, parent, app, db, ledger_service):
+    def __init__(self, parent, app, ledger_service):
         super().__init__(parent)
         self.app = app
         # Keep `db` only for compatibility, but Cashbox UI should not query SQL directly.
-        self.db = db
         self.ledger = ledger_service
         self.expected_cash = 0.0
 
@@ -115,7 +115,7 @@ class CashboxFrame(ctk.CTkFrame):
                     ),
                 )
         except Exception as e:
-            print(f"Cashbox Refresh Error: {e}")
+            logging.error(f"Cashbox Refresh Error: {e}")
 
     def handle_movement(self, direction):
         """Records manual cash injection or expense into the ledger."""

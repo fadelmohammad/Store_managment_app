@@ -1,6 +1,8 @@
 # main.py
 
 import customtkinter as ctk
+import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 from database.connection import DatabaseConnection
 from database.schema import create_tables, seed_ledger_accounts, insert_dummy_data
 from database.repositories.product_repo import ProductRepository
@@ -55,19 +57,6 @@ class StoreApp(ctk.CTk):
         seed_ledger_accounts(self.conn)
         insert_dummy_data(self.conn)
 
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM products")
-        product_count = cursor.fetchone()[0]
-        print(f"📊 Total products in database: {product_count}")
-
-        if product_count > 0:
-            cursor.execute("SELECT id, name, quantity, cost FROM products LIMIT 5")
-            products = cursor.fetchall()
-            for p in products:
-                print(f"  - Product: ID={p[0]}, Name={p[1]}, Qty={p[2]}, Cost={p[3]}")
-        else:
-            print("⚠️ No products found! Please add products first.")
-
         # --- THEME & WINDOW CONFIG ---
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
@@ -79,7 +68,6 @@ class StoreApp(ctk.CTk):
         # Service Layer (Business Logic)
         self.ledger_service = LedgerService(self.conn)
         self.sales_service = SalesService(self.conn, self.ledger_service)
-        # self.purchase_service = PurchaseService(self.db, self.ledger_service)
         self.purchase_service = PurchaseService(self.purchase_repo,self.product_repo,self.stock_repo,self.inventory_service,self.ledger_service,self.account_repo)
 
         # Load the rate from DB, fallback to 15000 if not found
@@ -111,7 +99,7 @@ class StoreApp(ctk.CTk):
             "inventory": InventoryFrame(self.container, self),           
             "pos": POSFrame(self.container, self, self.sales_service, self.account_service, self.inventory_service),  
             "accounts": AccountsFrame(self.container, self, self.account_service),           
-            # "cashbox": CashboxFrame(self.container, self, self.db, self.ledger_service),  
+            "cashbox": CashboxFrame(self.container, self, self.ledger_service),  
             "purchase": PurchaseFrame(
                 self.container,
                 self,
@@ -151,7 +139,7 @@ class StoreApp(ctk.CTk):
             if hasattr(frame, "refresh_data"):
                 frame.refresh_data()
         else:
-            print(f"Error: Frame '{name}' not found.")
+            logging.error(f"Error: Frame '{name}' not found.")
 
     def go_back(self):
         """Navigates to the previous screen in the stack."""
@@ -172,7 +160,7 @@ class StoreApp(ctk.CTk):
         try:
             self.db_connection.close()
         except Exception as e:
-            print(f"Cleanup Error: {e}")
+            logging.error(f"Cleanup Error: {e}")
         self.destroy()
 
 

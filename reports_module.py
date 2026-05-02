@@ -1,6 +1,7 @@
 # reports_module.py
 
 import customtkinter as ctk
+import logging
 from tkinter import ttk, messagebox
 from datetime import datetime
 
@@ -299,9 +300,7 @@ class ReportsFrame(ctk.CTkFrame):
             self.stock_tree.tag_configure("low_stock", foreground="#e74c3c")
 
         except Exception as e:
-            print(f"Inventory Report Error: {e}")
-            import traceback
-            traceback.print_exc()
+            logging.error(f"Inventory Report Error: {e}", exc_info=True)
 
     def get_date_filter(self):
         """Keep for backward compatibility - will be removed later"""

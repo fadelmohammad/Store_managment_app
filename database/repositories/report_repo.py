@@ -1,3 +1,5 @@
+import logging
+
 class ReportRepository:
     def __init__(self, conn):
         self.conn = conn
@@ -75,15 +77,14 @@ class ReportRepository:
                 ORDER BY p.name
             """).fetchall()
             
-            print(f"📊 get_all_products_for_report: found {len(results)} products")
+            logging.info(f"get_all_products_for_report: found {len(results)} products")
             
-            # طباعة أول منتج للتأكد
             if results:
-                print(f"  First product sample: {results[0]}")
+                logging.debug(f"First product sample: {results[0]}")
             
             return results
         except Exception as e:
-            print(f"❌ Error in get_all_products_for_report: {e}")
+            logging.error(f"Error in get_all_products_for_report: {e}")
             return []
     
 
