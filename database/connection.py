@@ -8,6 +8,10 @@ class DatabaseConnection:
         self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
+        # Performance PRAGMAs for 1000+ products scale
+        self.conn.execute("PRAGMA journal_mode = WAL")
+        self.conn.execute("PRAGMA synchronous = NORMAL")
+        self.conn.execute("PRAGMA cache_size = -10000")  # ~100MB cache
 
     def get_connection(self):
         return self.conn
