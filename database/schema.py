@@ -19,8 +19,8 @@ def create_tables(conn):
         )
         try:
             conn.execute("ALTER TABLE products ADD COLUMN price_syp REAL DEFAULT 0")
-        except:
-            pass
+        except sqlite3.OperationalError as e:
+            logging.warning(f"Products price_syp migration: {e}")
 
         conn.execute(
             """CREATE TABLE IF NOT EXISTS categories (
@@ -79,6 +79,13 @@ def create_tables(conn):
             "CREATE INDEX IF NOT EXISTS idx_invoice_partner ON invoices(partner_id)"
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_invoice_type ON invoices(type)")
+        
+        # Performance indexes for 1000+ products
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_products_quantity ON products(quantity)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_products_min_threshold ON products(min_threshold)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_invoices_date ON invoices(date)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_stock_movements_product_date ON stock_movements(product_id, date)")
 
         conn.execute(
             """CREATE TABLE IF NOT EXISTS invoice_items (
@@ -92,12 +99,13 @@ def create_tables(conn):
             FOREIGN KEY(product_id) REFERENCES products(id)
         )"""
         )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON invoice_items(invoice_id)")
         try:
             conn.execute(
                 "ALTER TABLE invoice_items ADD COLUMN price_syp REAL DEFAULT 0"
             )
-        except:
-            pass
+        except sqlite3.OperationalError as e:
+            logging.warning(f"Invoice_items price_syp migration: {e}")
 
         # 4. ACCOUNTING LEDGER (Double-Entry System)
         conn.execute(
@@ -155,11 +163,15 @@ def seed_ledger_accounts(conn):
         )
 
 
+import logging
+import sqlite3
+
 def insert_dummy_data(conn):
     with conn:
         # Check products
         res_products = conn.execute("SELECT COUNT(*) FROM products")
-        if res_products.fetchone()[0] == 0:
+        row = res_products.fetchone()
+        if row and row[0] == 0:
             conn.executemany(
                 "INSERT INTO products (name, price, cost, quantity, min_threshold, category_id) VALUES (?,?,?,?,?,?)",
                 [
@@ -170,7 +182,8 @@ def insert_dummy_data(conn):
 
         # Check accounts
         res_accounts = conn.execute("SELECT COUNT(*) FROM accounts")
-        if res_accounts.fetchone()[0] == 0:
+        row = res_accounts.fetchone()
+        if row and row[0] == 0:
             conn.executemany(
                 "INSERT INTO accounts (name, phone, address, role, balance) VALUES (?,?,?,?,?)",
                 [

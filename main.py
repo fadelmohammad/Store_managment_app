@@ -1,6 +1,8 @@
 # main.py
 
 import customtkinter as ctk
+import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 from database.connection import DatabaseConnection
 from database.schema import create_tables, seed_ledger_accounts, insert_dummy_data
 from database.repositories.product_repo import ProductRepository
@@ -8,12 +10,16 @@ from database.repositories.stock_movement_repo import StockMovementRepository
 from database.repositories.category_repo import CategoryRepository
 from database.repositories.settings_repo import SettingRepository
 from database.repositories.account_repo import AccountRepository
+from database.repositories.report_repo import ReportRepository
+from database.repositories.purchase_repo import PurchaseRepository
 from services.inventory_service import InventoryService
+from services.category_service import CategoryService
 from services.report_service import ReportingService
-from database.core import Database
+
 from services.ledger_service import LedgerService
 from services.sales_service import SalesService
 from services.purchase_service import PurchaseService
+from services.accounts_service import AccountService
 
 # UI Module Imports
 from dashboard import DashboardFrame
@@ -36,11 +42,16 @@ class StoreApp(ctk.CTk):
         self.stock_repo = StockMovementRepository(self.conn)
         self.product_repo = ProductRepository(self.conn)
         self.category_repo = CategoryRepository(self.conn)
-        self.inventory_service = InventoryService(self.product_repo, self.stock_repo, self.category_repo)
+        self.report_repo = ReportRepository(self.conn)
+        self.purchase_repo = PurchaseRepository(self.conn)
+        self.category_service = CategoryService(self.category_repo) 
+        self.inventory_service = InventoryService(self.product_repo, self.stock_repo, self.category_service,self.category_repo)
 
+        
         self.setting_repo = SettingRepository(self.conn)
         self.account_repo = AccountRepository(self.conn)
-        self.report_service = ReportingService(self.conn)
+        self.account_service = AccountService(self.account_repo)
+        self.report_service = ReportingService(self.report_repo,self.product_repo,self.stock_repo)  
 
         create_tables(self.conn)
         seed_ledger_accounts(self.conn)
@@ -55,9 +66,9 @@ class StoreApp(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
         # Service Layer (Business Logic)
-        # self.ledger_service = LedgerService(self.db)
-        # self.sales_service = SalesService(self.db, self.ledger_service)
-        # self.purchase_service = PurchaseService(self.db, self.ledger_service)
+        self.ledger_service = LedgerService(self.conn)
+        self.sales_service = SalesService(self.conn, self.ledger_service)
+        self.purchase_service = PurchaseService(self.purchase_repo,self.product_repo,self.stock_repo,self.inventory_service,self.ledger_service,self.account_repo)
 
         # Load the rate from DB, fallback to 15000 if not found
         saved_rate = self.setting_repo.get("exchange_rate", "15000")
@@ -84,16 +95,21 @@ class StoreApp(ctk.CTk):
     def init_frames(self):
         """Initializes and registers all UI modules."""
         self.frames = {
-            "dashboard": DashboardFrame(self.container, self),
-            "inventory": InventoryFrame(self.container, self),
-            "pos": POSFrame(self.container, self, self.db, self.sales_service),
-            "accounts": AccountsFrame(self.container, self, self.db),
-            "cashbox": CashboxFrame(self.container, self, self.db, self.ledger_service),
+            "dashboard": DashboardFrame(self.container, self),           
+            "inventory": InventoryFrame(self.container, self),           
+            "pos": POSFrame(self.container, self, self.sales_service, self.account_service, self.inventory_service),  
+            "accounts": AccountsFrame(self.container, self, self.account_service),           
+            "cashbox": CashboxFrame(self.container, self, self.ledger_service),  
             "purchase": PurchaseFrame(
-                self.container, self, self.db, self.purchase_service
+                self.container,
+                self,
+                self.conn,
+                self.purchase_service,
+                self.account_service,
+                self.inventory_service,
             ),
-            "reports": ReportsFrame(self.container, self, self.db),
-        }
+            "reports": ReportsFrame(self.container, self, self.conn),     
+    }
 
     # ==========================================
     # NAVIGATION LOGIC
@@ -123,7 +139,7 @@ class StoreApp(ctk.CTk):
             if hasattr(frame, "refresh_data"):
                 frame.refresh_data()
         else:
-            print(f"Error: Frame '{name}' not found.")
+            logging.error(f"Error: Frame '{name}' not found.")
 
     def go_back(self):
         """Navigates to the previous screen in the stack."""
@@ -144,7 +160,7 @@ class StoreApp(ctk.CTk):
         try:
             self.db_connection.close()
         except Exception as e:
-            print(f"Cleanup Error: {e}")
+            logging.error(f"Cleanup Error: {e}")
         self.destroy()
 
 

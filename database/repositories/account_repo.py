@@ -1,39 +1,57 @@
 # account_repo.py
 
+import logging
+
 class AccountRepository:
     def __init__(self, conn):
         self.conn = conn
 
     def get_by_id(self, account_id):
         """Fetches account details by ID."""
-        query = "SELECT * FROM accounts WHERE id = ?"
-        cursor = self.conn.execute(query, (account_id,))
-        return cursor.fetchone()
+        return self.conn.execute(
+            "SELECT * FROM accounts WHERE id = ?", (account_id,)
+        ).fetchone()
 
-    def fetch_accounts(self, search=None, role=None):
-        query = "SELECT id, name, role, phone, balance FROM accounts WHERE 1=1"
-        params = []
 
-        if role and role != "All":
-            query += " AND role = ?"
-            params.append(role)
+    def get_by_role(self, role):
+        """Fetches account details by ROLE."""
+        try:
+            results = self.conn.execute(
+                "SELECT * FROM accounts WHERE role = ? ORDER BY name", (role,)
+            ).fetchall()
 
-        if search:
-            query += " AND (name LIKE ? OR phone LIKE ?)"
-            params.extend([f"%{search}%", f"%{search}%"])
+            logging.debug(f"get_by_role('{role}'): found {len(results)} accounts")
 
-        return self.conn.execute(query, params).fetchall()
+            # Convert to list of dictionaries for easier access
+            formatted = [dict(row) for row in results]
+            return formatted
+        except Exception as e:
+            logging.error(f"Error in get_by_role: {e}")
+            return []
 
-    def add(self, name, role, phone, email, address, balance):
+    def get_all(self):
+        """Fetches all accounts ordered by name."""
+        try:
+            results = self.conn.execute(
+                "SELECT * FROM accounts ORDER BY name"
+            ).fetchall()
 
-        query = """
-            INSERT INTO accounts (name, role, phone, email, address, balance)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """
-        params = (name, role, phone, email, address, balance)
+            formatted = [dict(row) for row in results]
+            return formatted
+        except Exception as e:
+            logging.error(f"Error in get_all: {e}")
+            return []
 
-        cursor = self.conn.execute(query, params)
-        return cursor.lastrowid
+    def add(self, name, role, phone, email, address):
+        with self.conn:
+            cursor = self.conn.execute(
+                """
+                INSERT INTO accounts (name, role, phone, email, address)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (name, role, phone, email, address),
+            )
+            return cursor.lastrowid
 
     def update(self, account_id, data):
         """Executes the update query on the database."""
@@ -47,10 +65,15 @@ class AccountRepository:
             data['email'], data['address'], account_id
         )
         
-        self.conn.execute(query, params)
+        with self.conn:
+            self.conn.execute(query, params)
 
     def delete(self, account_id):
         """Removes the account record from the database."""
-        query = "DELETE FROM accounts WHERE id = ?"
-        self.conn.execute(query, (account_id,))
-
+        try:
+            with self.conn:
+                self.conn.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
+            logging.info(f"Account {account_id} deleted successfully")
+        except Exception as e:
+            logging.error(f"Error deleting account {account_id}: {e}")
+            raise

@@ -1,6 +1,5 @@
 # base_repo.py
 
-# not used for now!!
 class BaseRepository:
     def __init__(self, conn):
         self.conn = conn
