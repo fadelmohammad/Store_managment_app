@@ -326,6 +326,7 @@ class InventoryFrame(ctk.CTkFrame):
         
         CategoryManagementWindow(
             parent=self,
+            category_service=self.app.category_service,
             inventory_service=self.app.inventory_service,
             refresh_callback=self.refresh_category_list
         )
