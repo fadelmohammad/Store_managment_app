@@ -4,153 +4,373 @@ import customtkinter as ctk
 from datetime import datetime
 from tkinter import messagebox
 from safe_eval import safe_eval
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
+import numpy as np
+from collections import Counter
 
+plt.rcParams['font.family'] = 'DejaVu Sans'
+plt.rcParams['axes.unicode_minus'] = False
 
 class DashboardFrame(ctk.CTkFrame):
     def __init__(self, parent, app):
         super().__init__(parent)
         self.app = app
-        self.db = app.conn
+        self.conn = app.conn
 
-        # Local state for exchange rate
         self.current_exchange_rate = getattr(self.app, 'exchange_rate', 15000)
 
-        # --- MAIN LAYOUT ---
         self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(0, weight=0)  # Sidebar
-        self.grid_columnconfigure(1, weight=1)  # Content
+        self.grid_columnconfigure(0, weight=1)
 
-        self.setup_sidebar()
         self.setup_main_area()
+        self.refresh_stats()
 
-    # ==========================================
-    # 1. SIDEBAR (NAVIGATION)
-    # ==========================================
-    def setup_sidebar(self):
-        self.sidebar = ctk.CTkFrame(self, width=220, corner_radius=0, fg_color="#1e272e")
-        self.sidebar.grid(row=0, column=0, sticky="nsew")
-        self.sidebar.grid_propagate(False)
-
-        ctk.CTkLabel(self.sidebar, text="STORE MGT", font=("Arial", 22, "bold"), text_color="#00a8ff").pack(
-            pady=(30, 40))
-
-        # Updated Navigation to match the new Unified Accounts structure
-        nav_buttons = [
-            ("Inventory", "inventory"),
-            ("POS (Sales)", "pos"),
-            ("Accounts / Partners", "accounts"),  # Now leads to the 2-button screen
-            ("Purchase (Stock In)", "purchase"),
-            ("Reports & Analytics", "reports"),
-            ("Settings / Cashbox", "cashbox"),
-        ]
-
-        for text, frame_name in nav_buttons:
-            ctk.CTkButton(
-                self.sidebar,
-                text=text,
-                font=("Arial", 14, "bold"),
-                height=45,
-                anchor="w",
-                fg_color="transparent",
-                hover_color="#34495e",
-                command=lambda name=frame_name: self.app.show_frame(name)
-            ).pack(fill="x", padx=15, pady=8)
-
-    # ==========================================
-    # 2. MAIN WIDGET AREA
-    # ==========================================
     def setup_main_area(self):
-        self.main_area = ctk.CTkFrame(self, fg_color="transparent")
-        self.main_area.grid(row=0, column=1, sticky="nsew", padx=25, pady=25)
+        self.main_container = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self.main_container.pack(fill="both", expand=True, padx=20, pady=20)
 
-        self.main_area.grid_rowconfigure((0, 1), weight=1)
-        self.main_area.grid_columnconfigure((0, 1), weight=1)
+        self.main_container.grid_columnconfigure((0, 1), weight=1)
 
-        # Widget 1: Revenue (Real-time from Ledger)
-        self.rev_card = self.create_card(0, 0, "Daily Sales Revenue", "#f1c40f")
-        self.rev_label = ctk.CTkLabel(self.rev_card, text="€0.00", font=("Arial", 38, "bold"))
+        self.create_top_cards()
+        self.create_charts_section()
+        self.create_bottom_section()
+
+    def create_top_cards(self):
+        cards_frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        cards_frame.grid(row=0, column=0, columnspan=2, sticky="nsew", pady=(0, 20))
+        cards_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
+
+        self.rev_card = self.create_card(cards_frame, 0, "Daily Sales Revenue", "#f1c40f", 0)
+        self.rev_label = ctk.CTkLabel(self.rev_card, text="$0.00", font=ctk.CTkFont(size=36, weight="bold"))
         self.rev_label.pack(expand=True)
-        ctk.CTkButton(self.rev_card, text="Refresh", width=100, height=25, command=self.refresh_stats).pack(pady=10)
 
-        # Widget 2: Clock
-        self.time_card = self.create_card(0, 1, "Date & Time", "#3498db")
-        self.date_lbl = ctk.CTkLabel(self.time_card, text="", font=("Arial", 18))
-        self.date_lbl.pack(expand=True, pady=(10, 0))
-        self.time_lbl = ctk.CTkLabel(self.time_card, text="", font=("Arial", 32, "bold"))
-        self.time_lbl.pack(expand=True, pady=(0, 10))
-        self.update_clock()
+        self.syp_card = self.create_card(cards_frame, 1, "Daily Sales (SYP)", "#2ecc71", 1)
+        self.syp_label = ctk.CTkLabel(self.syp_card, text="0 SYP", font=ctk.CTkFont(size=36, weight="bold"))
+        self.syp_label.pack(expand=True)
 
-        # Widget 3: Calculator
-        self.calc_card = self.create_card(1, 0, "Quick Calculator", "#2ecc71")
-        self.calc_ent = ctk.CTkEntry(self.calc_card, font=("Arial", 20), justify="right")
-        self.calc_ent.pack(fill="x", padx=20, pady=10)
-        self.calc_ent.bind("<Return>", self.calculate)
-        self.calc_res = ctk.CTkLabel(self.calc_card, text="= 0.00", font=("Arial", 24, "bold"))
-        self.calc_res.pack(pady=10)
+        self.trans_card = self.create_card(cards_frame, 2, "Today's Transactions", "#3498db", 2)
+        self.trans_label = ctk.CTkLabel(self.trans_card, text="0", font=ctk.CTkFont(size=36, weight="bold"))
+        self.trans_label.pack(expand=True)
 
-        # Widget 4: Exchange Rate
-        self.ex_card = self.create_card(1, 1, "USD Exchange Rate", "#9b59b6")
+        self.ex_card = self.create_card(cards_frame, 3, "USD Exchange Rate", "#9b59b6", 3)
         self.ex_lbl = ctk.CTkLabel(self.ex_card, text=f"1 USD = {self.current_exchange_rate:,} SYP",
-                                   font=("Arial", 18, "bold"))
-        self.ex_lbl.pack(expand=True)
+                                   font=ctk.CTkFont(size=16, weight="bold"))
+        self.ex_lbl.pack(pady=10)
 
-        ex_input_f = ctk.CTkFrame(self.ex_card, fg_color="transparent")
-        ex_input_f.pack(fill="x", padx=20, pady=10)
-        self.ex_ent = ctk.CTkEntry(ex_input_f, placeholder_text="New Rate...", width=120)
+        ex_frame = ctk.CTkFrame(self.ex_card, fg_color="transparent")
+        ex_frame.pack(fill="x", padx=10, pady=5)
+        self.ex_ent = ctk.CTkEntry(ex_frame, placeholder_text="New Rate...", width=100)
         self.ex_ent.pack(side="left", padx=5)
-        ctk.CTkButton(ex_input_f, text="Set", width=60, command=self.update_ex).pack(side="right")
+        ctk.CTkButton(ex_frame, text="Set", width=50, command=self.update_ex_rate).pack(side="right")
 
-    def create_card(self, r, c, title, accent_color):
-        card = ctk.CTkFrame(self.main_area, fg_color="#2f3640", corner_radius=15)
-        card.grid(row=r, column=c, sticky="nsew", padx=12, pady=12)
-        ctk.CTkLabel(card, text=title, font=("Arial", 14, "bold"), text_color=accent_color).pack(pady=12)
+        refresh_btn = ctk.CTkButton(cards_frame, text="Refresh All", command=self.refresh_stats, 
+                                    fg_color="#e67e22", height=35, font=ctk.CTkFont(size=12))
+        refresh_btn.grid(row=1, column=0, columnspan=4, pady=10)
+
+    def create_card(self, parent, col, title, color, col_index):
+        card = ctk.CTkFrame(parent, fg_color="#2f3640", corner_radius=15, height=140)
+        card.grid(row=0, column=col_index, sticky="nsew", padx=10, pady=10)
+        card.grid_propagate(False)
+        
+        ctk.CTkLabel(card, text=title, font=ctk.CTkFont(size=14, weight="bold"), text_color=color).pack(pady=(15, 5))
         return card
 
-    # ==========================================
-    # LOGIC METHODS
-    # ==========================================
+    def create_charts_section(self):
+        charts_frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        charts_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=20)
+        charts_frame.grid_columnconfigure((0, 1), weight=1)
+
+        self.create_best_selling_chart(charts_frame, 0)
+        self.create_top_stock_chart(charts_frame, 1)
+
+    def create_best_selling_chart(self, parent, col):
+        chart_card = ctk.CTkFrame(parent, fg_color="#2f3640", corner_radius=15)
+        chart_card.grid(row=0, column=col, sticky="nsew", padx=10, pady=10)
+
+        ctk.CTkLabel(chart_card, text="Best Selling Products (This Month)", 
+                     font=ctk.CTkFont(size=16, weight="bold"), text_color="#f1c40f").pack(pady=10)
+
+        self.best_selling_frame = ctk.CTkFrame(chart_card, fg_color="transparent")
+        self.best_selling_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        self.load_best_selling_data()
+
+    def create_top_stock_chart(self, parent, col):
+        chart_card = ctk.CTkFrame(parent, fg_color="#2f3640", corner_radius=15)
+        chart_card.grid(row=0, column=col, sticky="nsew", padx=10, pady=10)
+
+        ctk.CTkLabel(chart_card, text="Top Stock Items (Warehouse)", 
+                     font=ctk.CTkFont(size=16, weight="bold"), text_color="#2ecc71").pack(pady=10)
+
+        self.top_stock_frame = ctk.CTkFrame(chart_card, fg_color="transparent")
+        self.top_stock_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        self.load_top_stock_data()
+
+    def create_bottom_section(self):
+        bottom_frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        bottom_frame.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=20)
+        bottom_frame.grid_columnconfigure((0, 1), weight=1)
+
+        self.create_sales_timing_chart(bottom_frame, 0)
+        self.create_calculator_widget(bottom_frame, 1)
+
+    def create_sales_timing_chart(self, parent, col):
+        chart_card = ctk.CTkFrame(parent, fg_color="#2f3640", corner_radius=15)
+        chart_card.grid(row=0, column=col, sticky="nsew", padx=10, pady=10)
+
+        ctk.CTkLabel(chart_card, text="Best Selling Hours (This Month)", 
+                     font=ctk.CTkFont(size=16, weight="bold"), text_color="#3498db").pack(pady=10)
+
+        self.timing_frame = ctk.CTkFrame(chart_card, fg_color="transparent")
+        self.timing_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        self.load_sales_timing_data()
+
+    def create_calculator_widget(self, parent, col):
+        calc_card = ctk.CTkFrame(parent, fg_color="#2f3640", corner_radius=15)
+        calc_card.grid(row=0, column=col, sticky="nsew", padx=10, pady=10)
+
+        ctk.CTkLabel(calc_card, text="Quick Calculator", 
+                     font=ctk.CTkFont(size=16, weight="bold"), text_color="#e74c3c").pack(pady=10)
+
+        self.calc_ent = ctk.CTkEntry(calc_card, font=ctk.CTkFont(size=20), justify="right", height=50)
+        self.calc_ent.pack(fill="x", padx=20, pady=10)
+        self.calc_ent.bind("<Return>", self.calculate)
+
+        self.calc_res = ctk.CTkLabel(calc_card, text="= 0.00", font=ctk.CTkFont(size=24, weight="bold"))
+        self.calc_res.pack(pady=10)
+
+        btn_frame = ctk.CTkFrame(calc_card, fg_color="transparent")
+        btn_frame.pack(pady=10)
+
+        buttons = ['7', '8', '9', '/', '4', '5', '6', '*', '1', '2', '3', '-', '0', '.', '=', '+']
+        row, col_btn = 0, 0
+        for btn in buttons:
+            if btn == '=':
+                ctk.CTkButton(btn_frame, text=btn, width=60, height=40, 
+                              command=lambda: self.calculate()).grid(row=row, column=col_btn, padx=2, pady=2)
+            else:
+                ctk.CTkButton(btn_frame, text=btn, width=60, height=40, 
+                              command=lambda b=btn: self.calc_ent.insert('end', b)).grid(row=row, column=col_btn, padx=2, pady=2)
+            col_btn += 1
+            if col_btn > 3:
+                col_btn = 0
+                row += 1
+
+        ctk.CTkButton(btn_frame, text="C", width=60, height=40, fg_color="red",
+                      command=lambda: self.calc_ent.delete(0, 'end')).grid(row=row, column=0, columnspan=4, sticky="we", padx=2, pady=2)
+
+    def load_best_selling_data(self):
+        try:
+            cursor = self.conn.cursor()
+            
+            query = """
+                SELECT p.name, SUM(ii.quantity) as total_sold
+                FROM invoice_items ii
+                JOIN invoices i ON ii.invoice_id = i.id
+                JOIN products p ON ii.product_id = p.id
+                WHERE i.type = 'SALE' 
+                AND strftime('%Y-%m', i.date) = strftime('%Y-%m', 'now')
+                GROUP BY p.id
+                ORDER BY total_sold DESC
+                LIMIT 5
+            """
+            
+            cursor.execute(query)
+            results = cursor.fetchall()
+            
+            for widget in self.best_selling_frame.winfo_children():
+                widget.destroy()
+            
+            if results:
+                products = [r[0][:20] + '...' if len(r[0]) > 20 else r[0] for r in results]
+                quantities = [r[1] for r in results]
+                max_qty = max(quantities) if quantities else 1
+                
+                for i, (product, qty) in enumerate(zip(products, quantities)):
+                    frame = ctk.CTkFrame(self.best_selling_frame, fg_color="transparent")
+                    frame.pack(fill="x", pady=5)
+                    
+                    percentage = (qty / max_qty) * 100 if max_qty > 0 else 0
+                    
+                    ctk.CTkLabel(frame, text=f"{i+1}.", width=30, font=ctk.CTkFont(size=12, weight="bold")).pack(side="left")
+                    ctk.CTkLabel(frame, text=product, width=150, anchor="w").pack(side="left", padx=5)
+                    
+                    progress = ctk.CTkProgressBar(frame, width=200, height=20)
+                    progress.pack(side="left", padx=10)
+                    progress.set(percentage / 100)
+                    
+                    ctk.CTkLabel(frame, text=str(qty), width=50, font=ctk.CTkFont(size=12, weight="bold")).pack(side="left")
+            else:
+                ctk.CTkLabel(self.best_selling_frame, text="No sales data available for this month", 
+                            font=ctk.CTkFont(size=14)).pack(expand=True)
+                
+        except Exception as e:
+            ctk.CTkLabel(self.best_selling_frame, text=f"Error loading data: {str(e)[:50]}", 
+                        font=ctk.CTkFont(size=12), text_color="red").pack(expand=True)
+
+    def load_top_stock_data(self):
+        try:
+            cursor = self.conn.cursor()
+            
+            query = """
+                SELECT name, quantity
+                FROM products
+                ORDER BY quantity DESC
+                LIMIT 5
+            """
+            
+            cursor.execute(query)
+            results = cursor.fetchall()
+            
+            for widget in self.top_stock_frame.winfo_children():
+                widget.destroy()
+            
+            if results:
+                products = [r[0][:20] + '...' if len(r[0]) > 20 else r[0] for r in results]
+                quantities = [r[1] for r in results]
+                max_qty = max(quantities) if quantities else 1
+                
+                for i, (product, qty) in enumerate(zip(products, quantities)):
+                    frame = ctk.CTkFrame(self.top_stock_frame, fg_color="transparent")
+                    frame.pack(fill="x", pady=5)
+                    
+                    percentage = (qty / max_qty) * 100 if max_qty > 0 else 0
+                    
+                    ctk.CTkLabel(frame, text=f"{i+1}.", width=30, font=ctk.CTkFont(size=12, weight="bold")).pack(side="left")
+                    ctk.CTkLabel(frame, text=product, width=150, anchor="w").pack(side="left", padx=5)
+                    
+                    progress = ctk.CTkProgressBar(frame, width=200, height=20, progress_color="#2ecc71")
+                    progress.pack(side="left", padx=10)
+                    progress.set(percentage / 100)
+                    
+                    ctk.CTkLabel(frame, text=str(qty), width=50, font=ctk.CTkFont(size=12, weight="bold")).pack(side="left")
+            else:
+                ctk.CTkLabel(self.top_stock_frame, text="No products available", 
+                            font=ctk.CTkFont(size=14)).pack(expand=True)
+                
+        except Exception as e:
+            ctk.CTkLabel(self.top_stock_frame, text=f"Error loading data: {str(e)[:50]}", 
+                        font=ctk.CTkFont(size=12), text_color="red").pack(expand=True)
+
+    def load_sales_timing_data(self):
+        try:
+            cursor = self.conn.cursor()
+            
+            query = """
+                SELECT strftime('%H', date) as hour, COUNT(*) as sales_count
+                FROM invoices
+                WHERE type = 'SALE' 
+                AND strftime('%Y-%m', date) = strftime('%Y-%m', 'now')
+                GROUP BY hour
+                ORDER BY hour
+            """
+            
+            cursor.execute(query)
+            results = cursor.fetchall()
+            
+            for widget in self.timing_frame.winfo_children():
+                widget.destroy()
+            
+            if results:
+                hours = [f"{int(r[0]):02d}:00" for r in results]
+                counts = [r[1] for r in results]
+                max_count = max(counts) if counts else 1
+                
+                for i, (hour, count) in enumerate(zip(hours, counts)):
+                    frame = ctk.CTkFrame(self.timing_frame, fg_color="transparent")
+                    frame.pack(fill="x", pady=3)
+                    
+                    percentage = (count / max_count) * 100 if max_count > 0 else 0
+                    
+                    ctk.CTkLabel(frame, text=hour, width=60, font=ctk.CTkFont(size=11, weight="bold")).pack(side="left")
+                    
+                    progress = ctk.CTkProgressBar(frame, width=250, height=15, progress_color="#3498db")
+                    progress.pack(side="left", padx=10)
+                    progress.set(percentage / 100)
+                    
+                    ctk.CTkLabel(frame, text=str(count), width=40, font=ctk.CTkFont(size=11)).pack(side="left")
+                
+                total = sum(counts)
+                avg = total / len(counts) if counts else 0
+                
+                info_frame = ctk.CTkFrame(self.timing_frame, fg_color="transparent")
+                info_frame.pack(fill="x", pady=(10, 0))
+                ctk.CTkLabel(info_frame, text=f"Total Sales: {total} | Avg per hour: {avg:.1f}", 
+                            font=ctk.CTkFont(size=11), text_color="#3498db").pack()
+            else:
+                ctk.CTkLabel(self.timing_frame, text="No sales data available for this month", 
+                            font=ctk.CTkFont(size=14)).pack(expand=True)
+                
+        except Exception as e:
+            ctk.CTkLabel(self.timing_frame, text=f"Error loading data: {str(e)[:50]}", 
+                        font=ctk.CTkFont(size=12), text_color="red").pack(expand=True)
 
     def refresh_stats(self):
-        """Pulls the latest revenue from the Database using the new Ledger query."""
         today = datetime.now().strftime("%Y-%m-%d")
         try:
-            # We use the new get_financial_report method from database.py
-            report = self.db.get_financial_report(today, today)
-            sales = report.get("sales", 0.0)
-            self.rev_label.configure(text=f"€{sales:,.2f}")
+            cursor = self.conn.cursor()
+            
+            cursor.execute("""
+                SELECT COALESCE(SUM(total), 0) FROM invoices 
+                WHERE type = 'SALE' AND date LIKE ?
+            """, (f"{today}%",))
+            sales_usd = cursor.fetchone()[0]
+            self.rev_label.configure(text=f"${sales_usd:,.2f}")
+            
+            cursor.execute("""
+                SELECT COALESCE(SUM(total_syp), 0) FROM invoices 
+                WHERE type = 'SALE' AND date LIKE ?
+            """, (f"{today}%",))
+            sales_syp = cursor.fetchone()[0]
+            self.syp_label.configure(text=f"{sales_syp:,.0f} SYP")
+            
+            cursor.execute("""
+                SELECT COUNT(*) FROM invoices 
+                WHERE type = 'SALE' AND date LIKE ?
+            """, (f"{today}%",))
+            trans_count = cursor.fetchone()[0]
+            self.trans_label.configure(text=str(trans_count))
+            
+            self.load_best_selling_data()
+            self.load_top_stock_data()
+            self.load_sales_timing_data()
+            
         except Exception as e:
             self.rev_label.configure(text="Error", text_color="#e74c3c")
-
-    def update_clock(self):
-        now = datetime.now()
-        self.date_lbl.configure(text=now.strftime("%A, %d %B %Y"))
-        self.time_lbl.configure(text=now.strftime("%I:%M:%S %p"))
-        self.after(1000, self.update_clock)
+            self.syp_label.configure(text="Error", text_color="#e74c3c")
 
     def calculate(self, event=None):
         try:
             expr = self.calc_ent.get().strip()
             if not expr:
                 return
+            if '/' in expr and expr.count('/') > 1:
+                raise ValueError("Invalid expression")
+            
             res = safe_eval(expr)
             self.calc_res.configure(text=f"= {res:,.2f}")
             self.calc_ent.delete(0, 'end')
         except Exception as e:
-            self.calc_res.configure(text=f"Error: {str(e)[:20]}", text_color="#e74c3c")
+            self.calc_res.configure(text=f"Error", text_color="#e74c3c")
+            self.calc_ent.after(2000, lambda: self.calc_res.configure(text="= 0.00", text_color="white"))
 
-    def update_ex(self):
+    def update_ex_rate(self):
         try:
             val = float(self.ex_ent.get())
-            if val <= 0: raise ValueError
+            if val <= 0:
+                raise ValueError
             
-            # 1. Update the app state
             self.app.exchange_rate = val
             self.current_exchange_rate = val
             
-            # 2. SAVE TO DATABASE (Permanent)
-            self.db.set_setting("exchange_rate", val)
+            cursor = self.conn.cursor()
+            cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('exchange_rate', ?)", (str(val),))
+            self.conn.commit()
             
-            # 3. Update UI
             self.ex_lbl.configure(text=f"1 USD = {val:,.2f} SYP")
             self.ex_ent.delete(0, 'end')
             

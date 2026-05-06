@@ -1,9 +1,59 @@
 # schema.py
 
+import sqlite3
+import logging
+import hashlib
 
 def create_tables(conn):
     # Using context manager to ensure all tables are created safely
     with conn:
+        # users
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                full_name TEXT,
+                role TEXT DEFAULT 'user',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                last_login DATETIME,
+                is_active BOOLEAN DEFAULT 1
+            )"""
+        )
+        
+        #  permissions
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role TEXT UNIQUE NOT NULL,
+                can_view_products BOOLEAN DEFAULT 0,
+                can_edit_products BOOLEAN DEFAULT 0,
+                can_delete_products BOOLEAN DEFAULT 0,
+                can_view_invoices BOOLEAN DEFAULT 0,
+                can_create_invoices BOOLEAN DEFAULT 0,
+                can_edit_invoices BOOLEAN DEFAULT 0,
+                can_delete_invoices BOOLEAN DEFAULT 0,
+                can_view_accounts BOOLEAN DEFAULT 0,
+                can_edit_accounts BOOLEAN DEFAULT 0,
+                can_view_reports BOOLEAN DEFAULT 0,
+                can_manage_users BOOLEAN DEFAULT 0,
+                can_manage_settings BOOLEAN DEFAULT 0
+            )"""
+        )
+        
+        # Logs
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS user_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                action TEXT,
+                details TEXT,
+                ip_address TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )"""
+        )
+
         # 1. INVENTORY MGT
         conn.execute(
             """CREATE TABLE IF NOT EXISTS products (
@@ -162,9 +212,44 @@ def seed_ledger_accounts(conn):
             "INSERT OR IGNORE INTO accounts_ledger (name, type) VALUES (?, ?)", accounts
         )
 
+def seed_permissions(conn):
+    permissions = [
+        # admin - صلاحيات كاملة
+        ('admin', 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
+        # manager - مدير (كل شيء ما عدا حذف المنتجات وإدارة المستخدمين)
+        ('manager', 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0),
+        # accountant - محاسب (فواتير وتقارير فقط)
+        ('accountant', 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0),
+        # viewer - مشاهد فقط
+        ('viewer', 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0),
+        # user - مستخدم عادي (مبيعات فقط)
+        ('user', 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0),
+    ]
+    
+    with conn:
+        conn.executemany("""
+            INSERT OR IGNORE INTO permissions 
+            (role, can_view_products, can_edit_products, can_delete_products, 
+             can_view_invoices, can_create_invoices, can_edit_invoices, can_delete_invoices,
+             can_view_accounts, can_edit_accounts, can_view_reports, 
+             can_manage_users, can_manage_settings) 
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, permissions)
 
-import logging
-import sqlite3
+
+def create_admin_user(conn):
+ 
+    def hash_password(password):
+        return hashlib.sha256(password.encode()).hexdigest()
+    
+    admin_pass = hash_password("123456")
+    with conn:
+        conn.execute("""
+            INSERT OR IGNORE INTO users (username, password, full_name, role, is_active)
+            VALUES (?, ?, ?, ?, ?)
+        """, ("admin", admin_pass, "مدير النظام", "admin", 1))
+
+
 
 def insert_dummy_data(conn):
     with conn:
@@ -191,3 +276,24 @@ def insert_dummy_data(conn):
                     ("random supplier", "None", "None", "Supplier", 0.0),
                 ],
             )
+
+def initialize_database(db_path="POS.db"):
+    conn = sqlite3.connect(db_path)
+    try:
+        create_tables(conn)
+        
+        seed_ledger_accounts(conn)
+        seed_permissions(conn)
+        create_admin_user(conn)
+        insert_dummy_data(conn)
+        
+        print("تم تهيئة قاعدة البيانات بنجاح!")
+        print(" المستخدم الافتراضي: admin")
+        print(" كلمة المرور: 123456")
+        
+        return conn
+    except Exception as e:
+        print(f" خطأ في تهيئة قاعدة البيانات: {e}")
+        raise
+    finally:
+        conn.close()

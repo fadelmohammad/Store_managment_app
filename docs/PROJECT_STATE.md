@@ -6,6 +6,7 @@ Desktop Store Management / POS system built with:
 - Python
 - customtkinter (UI)
 - SQLite (database)
+- matplotlib
 
 Currently undergoing a refactor from a monolithic architecture to a layered architecture:
 
