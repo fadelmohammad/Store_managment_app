@@ -1,5 +1,6 @@
 # services/purchase_service.py
 
+
 class PurchaseService:
     def __init__(self, purchase_repo, product_repo, stock_repo, inventory_service, ledger_service, account_repo):
         self.purchase_repo = purchase_repo
@@ -10,20 +11,13 @@ class PurchaseService:
         self.account_repo = account_repo
 
     def process_purchase(self, cart, partner_id, exchange_rate, payment_method="Cash", tax_pct=0, discount_pct=0):
-        """
-        Handles the end-to-end purchase workflow
-        """
         if not cart:
-            raise Exception("Cart is empty")
+            raise ValueError("Cart is empty")
 
         try:
-       
-            self.purchase_repo.begin_transaction()
+            self.purchase_repo.conn.execute("BEGIN")
 
-            subtotal = 0.0
-            for item in cart:
-                subtotal += item["price"] * item["qty"]
-
+            subtotal = sum(item["price"] * item["qty"] for item in cart)
             tax = subtotal * tax_pct
             discount = subtotal * discount_pct
             total_usd = (subtotal - discount) + tax
@@ -33,27 +27,18 @@ class PurchaseService:
             )
 
             for item in cart:
-              
                 self.inventory_service.update_weighted_average_cost(
                     item["id"], item["qty"], item["price"]
                 )
-
-           
                 self.purchase_repo.add_invoice_item(invoice_id, item["id"], item["qty"], item["price"])
-
-      
                 self.inventory_service.update_stock_with_log(
                     product_id=item["id"],
                     change=item["qty"],
                     m_type="IN",
-                    reason=f"Purchase Invoice #{invoice_id} (Rate: {exchange_rate:,.0f} SYP)"
+                    reason=f"Purchase Invoice #{invoice_id} (Rate: {exchange_rate:,.0f} SYP)",
                 )
 
-          
-            ledger_lines = [
-                {"account": "Inventory", "debit": total_usd, "credit": 0}
-            ]
-
+            ledger_lines = [{"account": "Inventory", "debit": total_usd, "credit": 0}]
             if payment_method == "Cash":
                 ledger_lines.append({"account": "Cash", "debit": 0, "credit": total_usd})
             else:
@@ -61,14 +46,14 @@ class PurchaseService:
                 self.purchase_repo.update_account_balance(partner_id, total_usd)
 
             self.ledger.create_entry(
-                description=f"Purchase Invoice #{invoice_id} @ {exchange_rate:,.0f} SYP",
-                reference_id=invoice_id,
-                lines=ledger_lines
+                f"Purchase Invoice #{invoice_id} @ {exchange_rate:,.0f} SYP",
+                invoice_id,
+                ledger_lines,
             )
 
-            self.purchase_repo.commit_transaction()
+            self.purchase_repo.conn.commit()
             return invoice_id, total_usd
 
-        except Exception as e:
-            self.purchase_repo.rollback_transaction()
-            raise e
+        except Exception:
+            self.purchase_repo.conn.rollback()
+            raise
