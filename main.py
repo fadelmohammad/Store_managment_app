@@ -1,5 +1,6 @@
 # main.py
 
+import os
 import customtkinter as ctk
 import tkinter as tk
 import logging
@@ -23,6 +24,7 @@ from services.sales_service import SalesService
 from services.purchase_service import PurchaseService
 from services.accounts_service import AccountService
 from services.user_service import UserService
+from services.login_service import LoginService
 
 from dashboard import DashboardFrame
 from inventory_module import InventoryFrame
@@ -47,6 +49,7 @@ class StoreApp(ctk.CTk):
         
         self.current_user = None
         self.user_service = UserService(self.conn)
+        self.login_service = LoginService(self.conn)
 
         self.stock_repo = StockMovementRepository(self.conn)
         self.product_repo = ProductRepository(self.conn)
@@ -97,7 +100,7 @@ class StoreApp(ctk.CTk):
             messagebox.showerror("Error", f"Failed to initialize database:\n{str(e)}")
 
     def show_login_screen(self):
-        self.login_frame = LoginFrame(self, self, self.on_login_success)
+        self.login_frame = LoginFrame(self, self, self.login_service, self.on_login_success)
         self.login_frame.pack(fill="both", expand=True)
 
     def on_login_success(self):
@@ -183,22 +186,22 @@ class StoreApp(ctk.CTk):
     
 
     def update_user_info(self, updated_user):
-        print("Updating user info in main app...")
+        logging.info("Updating user info")
         self.current_user = updated_user
-        
+
         if hasattr(self, 'sidebar_frame') and self.sidebar_frame:
             for widget in self.sidebar_frame.winfo_children():
                 widget.destroy()
-        
+
         self.create_sidebar()
-        
+
         current_frame_name = self.current_frame_name
         if current_frame_name in self.frames:
             frame = self.frames[current_frame_name]
             if hasattr(frame, "refresh_data"):
                 frame.refresh_data()
-        
-        print("User info updated successfully")
+
+        logging.info("User info updated successfully")
 
 
     def create_sidebar_button(self, text, frame_name):
@@ -284,41 +287,26 @@ class StoreApp(ctk.CTk):
     def logout(self):
         if messagebox.askyesno("Confirm", "Do you want to logout?"):
             if self.current_user:
-                try:
-                    cursor = self.conn.cursor()
-                    cursor.execute("""
-                        INSERT INTO user_logs (user_id, action, details, ip_address)
-                        VALUES (?, ?, ?, ?)
-                    """, (self.current_user['id'], "logout", "User logout", "localhost"))
-                    self.conn.commit()
-                except:
-                    pass
-            
-            import os
+                self.user_service.log_user_action(self.current_user['id'], "logout", "User logout")
+
             if os.path.exists("session.json"):
                 os.remove("session.json")
-            
+
             self.current_user = None
             self.frames = {}
             self.history = []
-            
+
             if self.sidebar_frame:
                 self.sidebar_frame.destroy()
             if self.main_content_frame:
                 self.main_content_frame.destroy()
-            
+
             self.show_login_screen()
 
     def on_close(self):
         try:
             if self.current_user:
-                cursor = self.conn.cursor()
-                cursor.execute("""
-                    INSERT INTO user_logs (user_id, action, details, ip_address)
-                    VALUES (?, ?, ?, ?)
-                """, (self.current_user['id'], "app_close", "Application closed", "localhost"))
-                self.conn.commit()
-            
+                self.user_service.log_user_action(self.current_user['id'], "app_close", "Application closed")
             self.db_connection.close()
         except Exception as e:
             logging.error(f"Cleanup Error: {e}")
