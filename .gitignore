@@ -17,3 +17,9 @@ garbage/
 *.bak
 .DS_Store
 Thumbs.db
+session.json
+store.db
+POS.db
+.amazonq/
+.qodo/
+.sixth/
