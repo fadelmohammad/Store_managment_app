@@ -2,7 +2,7 @@
 
 import customtkinter as ctk
 import tkinter.messagebox as messagebox
-import hashlib
+
 
 class UserProfileFrame(ctk.CTkFrame):
     def __init__(self, parent, app, user_service, current_user, on_update_callback):
@@ -137,106 +137,57 @@ class UserProfileFrame(ctk.CTkFrame):
     
     def load_user_data(self):
         try:
-            cursor = self.app.conn.cursor()
-            cursor.execute("""
-                SELECT username, full_name, role, is_active, 
-                       COALESCE(last_login, 'Never') as last_login,
-                       COALESCE(created_at, 'Unknown') as created_at
-                FROM users WHERE id = ?
-            """, (self.current_user['id'],))
-            
-            user = cursor.fetchone()
-            
+            user = self.user_service.get_user_profile(self.current_user['id'])
+
             if user:
-                self.username_label.configure(text=user[0])
-                
-                current_name = user[1] if user[1] else ""
+                self.username_label.configure(text=user['username'])
+
+                current_name = user['full_name'] or ""
                 self.name_entry.delete(0, 'end')
                 self.name_entry.insert(0, current_name)
-                self.fullname_display.configure(text=current_name if current_name else "Not set")
-                
-                self.role_label.configure(text=user[2].capitalize())
-                
-                status = "Active" if user[3] else "Inactive"
-                status_color = "#2ecc71" if user[3] else "#e74c3c"
+                self.fullname_display.configure(text=current_name or "Not set")
+
+                self.role_label.configure(text=user['role'].capitalize())
+
+                status = "Active" if user['is_active'] else "Inactive"
+                status_color = "#2ecc71" if user['is_active'] else "#e74c3c"
                 self.status_label.configure(text=status, text_color=status_color)
-                
-                self.last_login_label.configure(text=user[4])
-                self.created_label.configure(text=user[5])
-                
+
+                self.last_login_label.configure(text=user['last_login'])
+                self.created_label.configure(text=user['created_at'])
+
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load user data: {str(e)}")
     
     def reset_fields(self):
         self.name_entry.delete(0, 'end')
-        cursor = self.app.conn.cursor()
-        cursor.execute("SELECT full_name FROM users WHERE id = ?", (self.current_user['id'],))
-        user = cursor.fetchone()
-        if user and user[0]:
-            self.name_entry.insert(0, user[0])
-        
+        user = self.user_service.get_user_profile(self.current_user['id'])
+        if user and user['full_name']:
+            self.name_entry.insert(0, user['full_name'])
+
         self.current_password_entry.delete(0, 'end')
         self.new_password_entry.delete(0, 'end')
         self.confirm_password_entry.delete(0, 'end')
     
-    def hash_password(self, password):
-        return hashlib.sha256(password.encode()).hexdigest()
     
     def save_profile(self):
-        new_name = self.name_entry.get().strip()
-        current_password = self.current_password_entry.get()
-        new_password = self.new_password_entry.get()
-        confirm_password = self.confirm_password_entry.get()
-        
-        if not new_name:
-            messagebox.showwarning("Warning", "Please enter your full name")
-            return
-        
         try:
-            cursor = self.app.conn.cursor()
-            
-            if new_password:
-                if not current_password:
-                    messagebox.showwarning("Warning", "Please enter your current password to change password")
-                    return
-                
-                cursor.execute("SELECT password FROM users WHERE id = ?", (self.current_user['id'],))
-                stored_password = cursor.fetchone()
-                
-                if not stored_password or stored_password[0] != self.hash_password(current_password):
-                    messagebox.showwarning("Warning", "Current password is incorrect")
-                    return
-                
-                if len(new_password) < 4:
-                    messagebox.showwarning("Warning", "New password must be at least 4 characters")
-                    return
-                
-                if new_password != confirm_password:
-                    messagebox.showwarning("Warning", "New passwords do not match")
-                    return
-                
-                hashed_pass = self.hash_password(new_password)
-                cursor.execute("""
-                    UPDATE users SET full_name = ?, password = ? WHERE id = ?
-                """, (new_name, hashed_pass, self.current_user['id']))
-                
-                password_changed = True
-            else:
-                cursor.execute("""
-                    UPDATE users SET full_name = ? WHERE id = ?
-                """, (new_name, self.current_user['id']))
-                password_changed = False
-            
-            self.app.conn.commit()
-            
-            self.current_user['full_name'] = new_name
-            self.fullname_display.configure(text=new_name)
-            
+            result = self.user_service.update_own_profile(
+                self.current_user['id'],
+                self.name_entry.get(),
+                self.current_password_entry.get(),
+                self.new_password_entry.get(),
+                self.confirm_password_entry.get(),
+            )
+
+            self.current_user['full_name'] = result['full_name']
+            self.fullname_display.configure(text=result['full_name'])
+
             self.current_password_entry.delete(0, 'end')
             self.new_password_entry.delete(0, 'end')
             self.confirm_password_entry.delete(0, 'end')
-            
-            if password_changed:
+
+            if result['password_changed']:
                 messagebox.showinfo("Success", "Profile updated successfully!\nPlease login again with your new password.")
                 if messagebox.askyesno("Logout", "Do you want to logout now?"):
                     self.app.logout()
@@ -247,6 +198,8 @@ class UserProfileFrame(ctk.CTkFrame):
                     self.app.show_frame("dashboard")
                     self.app.update_user_info(self.current_user)
 
+        except ValueError as e:
+            messagebox.showwarning("Warning", str(e))
         except Exception as e:
             messagebox.showerror("Error", f"Failed to update profile: {str(e)}")
     
