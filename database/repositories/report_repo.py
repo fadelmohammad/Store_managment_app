@@ -266,3 +266,79 @@ class ReportRepository:
         params.append(limit)
         
         return self.conn.execute(query, params).fetchall()
+
+    # ==========================================
+    # Dashboard-specific metrics (no UI SQL)
+    # ==========================================
+
+    def get_today_sales_totals(self, today_like_prefix):
+        """
+        Returns (sales_usd, sales_syp, transactions_count)
+        today_like_prefix example: '2026-05-08%'
+        """
+        sales_usd = self.conn.execute(
+            "SELECT COALESCE(SUM(total), 0) FROM invoices WHERE type = 'SALE' AND date LIKE ?",
+            (today_like_prefix,),
+        ).fetchone()[0]
+
+        sales_syp = self.conn.execute(
+            "SELECT COALESCE(SUM(total_syp), 0) FROM invoices WHERE type = 'SALE' AND date LIKE ?",
+            (today_like_prefix,),
+        ).fetchone()[0]
+
+        trans_count = self.conn.execute(
+            "SELECT COUNT(*) FROM invoices WHERE type = 'SALE' AND date LIKE ?",
+            (today_like_prefix,),
+        ).fetchone()[0]
+
+        return sales_usd, sales_syp, trans_count
+
+    def get_best_selling_products_this_month(self, limit=5):
+        """
+        Best selling products for current month based on invoice_items quantities
+        where invoices.type='SALE'
+        Returns list of tuples: [(product_name, total_qty), ...]
+        """
+        rows = self.conn.execute(
+            """
+            SELECT p.name, SUM(ii.quantity) as total_sold
+            FROM invoice_items ii
+            JOIN invoices i ON ii.invoice_id = i.id
+            JOIN products p ON ii.product_id = p.id
+            WHERE i.type = 'SALE'
+              AND strftime('%Y-%m', i.date) = strftime('%Y-%m', 'now')
+            GROUP BY p.id
+            ORDER BY total_sold DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return rows
+
+    def get_top_stock_items(self, limit=5):
+        """Returns list of tuples: [(product_name, quantity), ...]"""
+        return self.conn.execute(
+            """
+            SELECT name, quantity
+            FROM products
+            ORDER BY quantity DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+    def get_best_selling_hours_this_month(self):
+        """
+        Returns list of tuples: [(hour_int, sales_count), ...]
+        where hour is derived from invoices.date
+        """
+        return self.conn.execute(
+            """
+            SELECT CAST(strftime('%H', i.date) AS INTEGER) as hour, COUNT(*) as sales_count
+            FROM invoices i
+            WHERE i.type = 'SALE'
+              AND strftime('%Y-%m', i.date) = strftime('%Y-%m', 'now')
+            GROUP BY hour
+            ORDER BY hour
+            """,
+        ).fetchall()
