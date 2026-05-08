@@ -1,16 +1,18 @@
-
 import logging
 from datetime import datetime
 
 
 class ReportingService:
-    def __init__(self, report_repo, product_repo, stock_repo):
+    def __init__(self, report_repo, product_repo, stock_repo, invoice_service):
         """
-        Initialize ReportingService with required repositories
+        Initialize ReportingService with required repositories.
+
+        Invoice reads are delegated to `invoice_service` (UI -> ReportingService -> InvoiceService -> InvoiceRepository).
         """
         self.report_repo = report_repo
         self.product_repo = product_repo
         self.stock_repo = stock_repo
+        self.invoice_service = invoice_service
 
     # ==========================================
     # Helper Methods
@@ -23,7 +25,7 @@ class ReportingService:
         table_alias: Optional table alias (e.g., "i." for invoices)
         """
         prefix = f"{table_alias}" if table_alias else ""
-        
+
         if period == "Today":
             return f"WHERE {prefix}date >= date('now')"
         elif period == "Last 7 Days":
@@ -48,55 +50,42 @@ class ReportingService:
     # ==========================================
 
     def get_invoices(self, period="All Time"):
-        """Get all invoices with date filter"""
-        date_clause = self._get_date_clause_from_period(period, "")
-        return self.report_repo.get_all_invoices(date_clause)
+        """Get all invoices with date filter (delegated to InvoiceService)."""
+        return self.invoice_service.get_invoices(period)
 
     def get_invoice_details(self, invoice_id):
-        """Get full details of a specific invoice"""
-        invoice = self.report_repo.get_invoice_by_id(invoice_id)
-        if not invoice:
-            return None, None
-        
-        items = self.report_repo.get_invoice_items(invoice_id)
-        return invoice, items
+        """Get full details of a specific invoice (delegated to InvoiceService)."""
+        return self.invoice_service.get_invoice_details(invoice_id)
 
     def get_invoice_summary(self, period="All Time"):
-        """Get summary statistics for invoices"""
-        date_clause = self._get_date_clause_from_period(period, "")
-        
-        return {
-            "count": self.report_repo.get_invoice_count(date_clause),
-            "total": self.report_repo.get_invoice_total_sum(date_clause)
-        }
+        """Get summary statistics for invoices (delegated to InvoiceService)."""
+        return self.invoice_service.get_invoice_summary(period)
 
     # ==========================================
     # Inventory Reports
     # ==========================================
 
-    # report_service.py - في دالة get_inventory_report
-
     def get_inventory_report(self):
         """Get complete inventory report with all products"""
         try:
             logging.info("Getting inventory report...")
-            
+
             products = self.report_repo.get_all_products_for_report()
             logging.debug(f"Raw products from repo: {len(products) if products else 0}")
-            
+
             total_value = self.report_repo.get_total_inventory_value()
             logging.info(f"Total inventory value: {total_value}")
-            
+
             low_stock = self.report_repo.get_low_stock_products(5)
-            
+
             formatted_products = [dict(p) for p in products]
             logging.debug(f"Formatted {len(formatted_products)} products")
-            
+
             return {
                 "products": formatted_products,
                 "total_value": total_value if total_value else 0,
                 "low_stock_count": len(low_stock) if low_stock else 0,
-                "low_stock_products": low_stock if low_stock else []
+                "low_stock_products": low_stock if low_stock else [],
             }
         except Exception as e:
             logging.error(f"Error in get_inventory_report: {e}", exc_info=True)
@@ -104,15 +93,15 @@ class ReportingService:
                 "products": [],
                 "total_value": 0,
                 "low_stock_count": 0,
-                "low_stock_products": []
+                "low_stock_products": [],
             }
-        
+
     def get_stock_movements(self, start_date=None, end_date=None, period="All Time"):
         """Get stock movements with optional date filter"""
         if period != "All Time":
             # Convert period to dates if needed
             pass
-        
+
         return self.report_repo.get_stock_movements(start_date, end_date)
 
     # ==========================================
@@ -125,34 +114,33 @@ class ReportingService:
         Returns dictionary with sales, cogs, expenses, net_profit
         """
         date_clause = self._get_date_filter_for_ledger(period)
-        
+
         try:
             revenue = self.report_repo.get_ledger_account_balance(
-                'Sales Revenue', 'SUM(credit) - SUM(debit)', date_clause
+                "Sales Revenue", "SUM(credit) - SUM(debit)", date_clause
             )
             cogs = self.report_repo.get_ledger_account_balance(
-                'Cost of Goods Sold', 'SUM(debit) - SUM(credit)', date_clause
+                "Cost of Goods Sold", "SUM(debit) - SUM(credit)", date_clause
             )
             expenses = self.report_repo.get_ledger_account_balance(
-                'General Expense', 'SUM(debit) - SUM(credit)', date_clause
+                "General Expense", "SUM(debit) - SUM(credit)", date_clause
             )
-            
+
             net_profit = revenue - cogs - expenses
-            
+
             # Get expense breakdown
             expense_breakdown = self.report_repo.get_expense_breakdown(date_clause)
-            
             formatted_expenses = [dict(exp) for exp in expense_breakdown]
-            
+
             return {
                 "sales": revenue,
                 "cogs": cogs,
                 "expenses": expenses,
                 "net_profit": net_profit,
                 "expense_breakdown": formatted_expenses,
-                "period": period
+                "period": period,
             }
-            
+
         except Exception as e:
             logging.error(f"Error in get_financial_report: {e}", exc_info=True)
             return {
@@ -162,13 +150,13 @@ class ReportingService:
                 "net_profit": 0.0,
                 "expense_breakdown": [],
                 "period": period,
-                "error": str(e)
+                "error": str(e),
             }
 
     def get_sales_trend(self, period="All Time"):
         """Get sales trend data for charts"""
         date_clause = self._get_date_filter_for_ledger(period)
-        
+
         # Determine grouping based on period
         if period == "Today":
             group_by = "hour"
@@ -176,14 +164,14 @@ class ReportingService:
             group_by = "day"
         else:
             group_by = "day"
-        
+
         # For now, return revenue by day
         revenue_data = self.report_repo.get_revenue_by_period(
             period_type="day" if group_by == "day" else "month"
         )
-        
-        days = [row['period'] for row in revenue_data]
-        sales = [row['total'] or 0 for row in revenue_data]
+
+        days = [row["period"] for row in revenue_data]
+        sales = [row["total"] or 0 for row in revenue_data]
         return days, sales
 
     # ==========================================
@@ -198,3 +186,25 @@ class ReportingService:
         """Get top selling products"""
         # For now, ignore period for top products
         return self.report_repo.get_top_products(limit)
+
+    def get_today_dashboard_metrics(self, today_like_prefix):
+        """
+        Returns:
+          (sales_usd, sales_syp, transactions_count)
+        today_like_prefix example: '2026-05-08%'
+        """
+        return self.report_repo.get_today_sales_totals(today_like_prefix)
+
+    def get_best_selling_products_this_month(self, limit=5):
+        """
+        Returns list of tuples: [(product_name, total_qty), ...]
+        """
+        return self.report_repo.get_best_selling_products_this_month(limit)
+
+    def get_top_stock_items(self, limit=5):
+        """Returns list of tuples: [(product_name, quantity), ...]"""
+        return self.report_repo.get_top_stock_items(limit)
+
+    def get_best_selling_hours_this_month(self):
+        """Returns list of tuples: [(hour_int, sales_count), ...]"""
+        return self.report_repo.get_best_selling_hours_this_month()
