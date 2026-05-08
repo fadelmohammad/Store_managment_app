@@ -215,5 +215,6 @@ class LoginFrame(ctk.CTkFrame):
                     if "username" in data:
                         self.username_entry.insert(0, data["username"])
                         self.remember_var.set(True)
-            except Exception:
-                pass
+            except Exception as e:
+                # Don't block UI startup if session.json is corrupt/unreadable
+                logging.warning("Failed to load session.json: %s", e)
