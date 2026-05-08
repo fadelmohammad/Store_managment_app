@@ -18,15 +18,17 @@ Primary goals:
 - Ensure data integrity
 - Enable scalability
 
+---
 
 ## Architecture Progress
 
 | Layer | Status |
 |---|---|
-| Repository pattern | Partially complete — Users, Accounts, Products, Categories, Stock, Ledger, Reports, Purchases done. `invoice_repo.py` is empty. |
-| Service layer | Partially complete — Users, Accounts, Inventory, Categories, Reports, Purchases fully repo-based. Sales and Ledger still use raw `self.db` access. |
-| UI layer | Partially clean — Inventory, Categories, User Profile, User Management fully decoupled. Login, POS, Accounts, Cashbox, Reports, Dashboard still use direct DB or raw cursors. |
+| Repository pattern | Partially complete — Users, Accounts, Products, Categories, Stock, Ledger, Reports, Purchases, Sales repo operations done. `invoice_repo.py` is empty (invoices are handled via other repo(s) currently). |
+| Service layer | Partially complete — Most services delegate to repositories. Ledger/Cashbox, Login, Sales/POS, Purchases, Reports are now repo-backed. |
+| UI layer | Partially clean — UI frames avoid raw SQL and call services. Some UI logic still formats/branches on returned row shapes (dict vs tuple). |
 
+---
 
 ## Modules
 
@@ -35,7 +37,8 @@ Primary goals:
 - `user_service.py` → fully delegates to repo, no raw SQL
 - `user_profile.py` → fully decoupled, uses `user_service` only
 - `user_management_module.py` → uses `user_service`
-- `login_module.py` → **partially migrated**: `reset_password` uses `user_service`, but `login()` still runs raw SQL directly (auth query, permissions fetch, last_login update, log insert)
+- `login_service.py` → auth + permissions + last_login + login log (repo-based)
+- `login_module.py` → uses `login_service` (no raw SQL); supports Remember Me + Forgot Password dialog
 
 ### Inventory (COMPLETE)
 - `inventory_service.py` → business logic, delegates to repos
@@ -51,52 +54,58 @@ Primary goals:
 ### Accounts (MOSTLY COMPLETE)
 - `account_repo.py` → full CRUD
 - `accounts_service.py` → fully repo-based with validation
-- `accounts_module.py` → status unknown, needs verification
+- `accounts_module.py` → needs verification (ensure no direct DB calls)
 
-### Ledger / Cashbox (PARTIAL)
-- `ledger_repo.py` → read operations only (cash balance, recent transactions)
-- `ledger_service.py` → `get_cash_balance` and `get_recent_cash_transactions` use repo correctly. `create_entry()` still uses `self.db.cursor.execute()` directly — **not repo-based**
-- `cashbox_module.py` → uses `ledger_service`, status of direct DB calls unknown
+### Ledger / Cashbox (MOSTLY COMPLETE)
+- `ledger_repo.py` → supports:
+  - `get_cash_balance()`
+  - `get_recent_cash_transactions()`
+  - `create_entry()` (writes journal entries + lines via repo, using `with self.conn:`)
+- `ledger_service.py` → delegates to `ledger_repo` fully (no `self.db` usage)
+- `cashbox_module.py` → uses `ledger_service` only for reads/writes
 
-### Sales / POS (NOT MIGRATED)
-- `sales_service.py` → uses `self.db.cursor.execute()` and `self.db.conn` throughout. Calls `self.db.update_stock_with_log()` (legacy DB class method). No repository usage.
-- `pos_module.py` → uses `sales_service` but service itself is not clean
+### Sales / POS (MOSTLY COMPLETE)
+- `sales_service.py` → uses `sales_repo` for all DB ops + uses `ledger_service.create_entry()` for journal writes
+- `pos_module.py` → uses:
+  - `inventory_service.search_products()` for product listing
+  - `account_service.get_by_role()` for customer listing
+  - `sales_service.process_sale()` for checkout
+  - no direct DB calls in the UI
 
 ### Purchases (MOSTLY COMPLETE)
 - `purchase_repo.py` → implemented
-- `purchase_service.py` → uses repos for invoice and stock ops. Still calls `self.ledger.create_entry()` which internally uses raw DB access.
+- `purchase_service.py` → uses repos for invoice and stock ops
+- Ledger integration: validate that purchase journal writes go through `ledger_service` (current docs previously flagged it; confirm if purchase uses the clean path)
 
 ### Reports (MOSTLY COMPLETE)
-- `report_repo.py` → implemented
-- `report_service.py` → fully delegates to `report_repo`
-- `reports_module.py` → passes `self.conn` directly — needs verification
+- `report_repo.py` → implemented (verify all needed query methods exist)
+- `report_service.py` → delegates to `report_repo` and formats results
+- `reports_module.py` → uses `report_service` (no direct DB calls); builds UI tables from returned dict/tuple shapes
 
-### Dashboard
-- `dashboard.py` → status unknown, likely still uses direct DB calls
+### Dashboard (MOSTLY COMPLETE)
+- `dashboard.py` → uses `report_service` for:
+  - today metrics
+  - best selling products
+  - top stock items
+  - best selling hours
+- No direct SQL expected in the UI
 
+---
 
-## Known Issues
-
-### Critical
-- `login_module.py` — `login()` bypasses `user_service` entirely: runs raw SQL for auth, permissions, last_login update, and log insert
-- `sales_service.py` — uses `self.db.cursor`, `self.db.conn`, and `self.db.update_stock_with_log()` (legacy). No repo layer.
-- `ledger_service.py` — `create_entry()` uses `self.db.cursor.execute()` directly
-- `invoice_repo.py` — empty file, invoices have no repository
+## Known Issues (Updated)
 
 ### Security
-- `login_module.py` — `hash_password()` duplicated from `user_service`. Login should delegate to the service.
-- `session.json` — stores username in plaintext with no expiry or integrity check
-- No brute-force / lockout protection on failed logins
-- `safe_eval.py` — eval-based logic is a security risk regardless of guards
+- `safe_eval.py` — eval-based logic is a security risk regardless of guards.
+- `session.json` — stores username in plaintext with no expiry or integrity check.
+- No brute-force / lockout protection on failed logins in `login_service`.
+- `safe_eval.py` remains a priority hardening target.
 
 ### Code Quality
-- `main.py` — god object: wires all services, repos, frames, handles login/logout, session, sidebar, and routing
-- `main.py` — `logout()` and `on_close()` write raw SQL directly instead of using `user_service.log_user_action()`
-- `main.py` — `print()` statements left in production code (should be `logging`)
-- `user_service.py` — `get_user_profile()` and `get_user_by_id()` are near-duplicates querying the same table
-- Magic color strings (`#1f538d`, `#2ecc71`, etc.) scattered across 8+ files with no constants file
-- `import json / import os` inside functions in `login_module.py` instead of top-level
+- `main.py` — god object: wires services/repos/frames, handles login/logout, session, sidebar, and routing.
+- Magic color strings scattered across multiple UI modules; no shared UI constants file.
+- `reports_module.py` — defensive branching on return types (dict vs tuple) suggests inconsistent row shaping between repos/services; ideally normalize to dicts.
 
+---
 
 ## Data Flow (Current)
 
@@ -105,69 +114,57 @@ Primary goals:
 | Inventory | UI → InventoryService → Repos → DB ✅ |
 | Categories | UI → CategoryService → Repo → DB ✅ |
 | Users | UI → UserService → UserRepo → DB ✅ |
-| Accounts | UI → AccountService → AccountRepo → DB ✅ |
+| Accounts | UI → AccountService → AccountRepo → DB ✅ (verify UI module) |
 | Reports | UI → ReportingService → ReportRepo → DB ✅ |
-| Purchases | UI → PurchaseService → Repos → DB ✅ (ledger step is dirty) |
-| Cashbox | UI → LedgerService → LedgerRepo → DB ✅ (read only; write is dirty) |
-| Login | UI → raw SQL ❌ |
-| Sales/POS | UI → SalesService → raw DB ❌ |
-| Dashboard | UI → unknown ❓ |
+| Purchases | UI → PurchaseService → PurchaseRepo/StockRepo → DB ✅/⚠️ (validate ledger path) |
+| Cashbox | UI → LedgerService → LedgerRepo → DB ✅ |
+| Login | UI → LoginService → UserRepo → DB ✅ |
+| Sales/POS | UI → SalesService (+ repos) → LedgerService → DB ✅ |
+| Dashboard | UI → ReportService → ReportRepo → DB ✅ |
 
+---
 
 ## Next Tasks (Priority Order)
 
-**1. Migrate `login_module.py` to use `user_service`**
-- Move auth query, permissions fetch, last_login update, and login log into `user_service.login()`
-- Remove `hash_password()` from `LoginFrame`
+1. **Verify `accounts_module.py`**
+   - Confirm it uses `account_service` only (no direct DB calls).
 
-**2. Fix `ledger_service.create_entry()`**
-- Move journal insert logic into `ledger_repo`
-- `LedgerService.create_entry()` should call `self.ledger_repo.create_entry()`
+2. **Verify `purchase_service.py` ledger integration**
+   - Ensure it uses `ledger_service` / `ledger_repo` write path, not legacy raw DB writes.
 
-**3. Create `InvoiceRepository`**
-- `invoice_repo.py` is empty
-- Move invoice SQL from `sales_service` and `purchase_service` into it
+3. **Verify `report_repo.py` query coverage**
+   - Ensure all methods used by `report_service` exist and return consistent shapes (prefer dict-like rows).
 
-**4. Migrate `sales_service.py`**
-- Replace `self.db.cursor`, `self.db.conn`, `self.db.update_stock_with_log()` with repo calls
-- Depends on InvoiceRepository and clean LedgerService
+4. **Harden `safe_eval.py`**
+   - Replace with a safe expression parser/evaluator approach.
 
-**5. Clean up `main.py`**
-- Replace raw SQL in `logout()` and `on_close()` with `user_service.log_user_action()`
-- Replace `print()` with `logging`
+5. **Reduce “dict vs tuple” branching**
+   - Normalize repository outputs to dicts (sqlite3.Row / dict conversion in repo/service).
 
-**6. Verify and clean `dashboard.py`, `cashbox_module.py`, `reports_module.py`**
-- Confirm whether they use direct DB or go through services
+6. **Split `main.py` god object**
+   - Extract wiring/routing/sidebar responsibilities into smaller components.
 
+---
 
 ## Completed Milestones
 
-### Milestone 1 — Categories Module (2024-04-29)
-- CategoryRepository, CategoryService, standalone CategoryManagementWindow
+### Milestone 1 — Category Module (2024-04-29)
+- CategoryRepository, CategoryService, CategoryManagementWindow
 - Hierarchical category paths, product counts, safe delete
-- Reference implementation for target architecture
 
 ### Milestone 2 — Inventory UI Migration (2024-04-30)
-- inventory_module.py fully decoupled from DB
-- All product/stock operations through InventoryService
+- `inventory_module.py` fully decoupled from DB
 
 ### Milestone 3 — Repository Standardization (2024-04-30)
-- Removed `_execute()` wrapper from all repos
-- Standardized: reads use `.execute().fetchone/all()`, writes use `with self.conn:`
-- Applied to: category_repo, account_repo, purchase_repo, report_repo, stock_movement_repo
+- Standardized reads/writes patterns across repos
 
-### Milestone 4 — Users Module (current session)
-- Created `user_repo.py` with full CRUD, permissions, logs
-- Migrated `user_service.py` to fully delegate to `user_repo` — no raw SQL
-- Migrated `user_profile.py` to use `user_service` — no direct DB access
-- Added `reset_password()` to `user_service` and `login_module` (Forgot Password dialog)
-- Added auto-dismiss welcome toast on login (replaces blocking messagebox)
+### Milestone 4 — Users & Auth (current)
+- user repo/service/profile/login migration
+- login service handles auth + permissions + last_login + logs
+- forgot password dialog uses `user_service.reset_password()`
 
-
-## Architecture Rules
-
-- Repository layer: SQL only, no business logic
-- Service layer: business logic only, no SQL, no `conn` access
-- UI layer: no DB access, no SQL, calls services only
-- Write operations: `with self.conn:` context manager (auto-commit + rollback)
-- Read operations: `.execute(query).fetchone/all()` — no commit needed
+### Milestone 5 — Sales/POS, Ledger, Reports UI integration (current)
+- POS uses services (`inventory_service`, `account_service`, `sales_service`)
+- Sales uses repo-based DB ops + ledger_service journal entries
+- Cashbox uses ledger_service only
+- Dashboard & Reports use report_service only
