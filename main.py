@@ -25,14 +25,16 @@ from services.purchase_service import PurchaseService
 from services.accounts_service import AccountService
 from services.user_service import UserService
 from services.login_service import LoginService
+from services.invoices_service import InvoiceService
+from ui.sidebar_builder import build_sidebar
 
-from dashboard import DashboardFrame
+from ui.dashboard import DashboardFrame
 from inventory_module import InventoryFrame
-from pos_module import POSFrame
+from ui.pos_module import POSFrame
 from purchase_module import PurchaseFrame
-from accounts_module import AccountsFrame
-from cashbox_module import CashboxFrame
-from reports_module import ReportsFrame
+from ui.accounts_module import AccountsFrame
+from ui.cashbox_module import CashboxFrame
+from ui.reports_module import ReportsFrame
 from login_module import LoginFrame
 from user_profile import UserProfileFrame
 from user_management_module import UserManagementFrame
@@ -62,7 +64,15 @@ class StoreApp(ctk.CTk):
         self.setting_repo = SettingRepository(self.conn)
         self.account_repo = AccountRepository(self.conn)
         self.account_service = AccountService(self.account_repo)
-        self.report_service = ReportingService(self.report_repo, self.product_repo, self.stock_repo)
+
+        self.invoice_repo = None  # not used; invoice reads go via InvoiceService
+        self.invoice_service = InvoiceService(self.conn)
+        self.report_service = ReportingService(
+            self.report_repo,
+            self.product_repo,
+            self.stock_repo,
+            self.invoice_service,
+        )
 
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
@@ -121,64 +131,17 @@ class StoreApp(ctk.CTk):
 
 
     def create_sidebar(self):
-        logo_label = ctk.CTkLabel(
-            self.sidebar_frame, 
-            text="OmniPOS", 
-            font=ctk.CTkFont(size=24, weight="bold"),
-            pady=20
+        # Extracted from the previous inline implementation to reduce the god-object size.
+        # Behavior is unchanged: it builds the same sidebar widgets and uses existing callbacks.
+        build_sidebar(
+            app=self,
+            container=self.sidebar_frame,
+            user=self.current_user,
+            on_show_profile=self.show_profile,
+            on_logout=self.logout,
+            on_show_frame=self.show_frame,
+            create_button=self.create_sidebar_button,
         )
-        logo_label.pack()
-
-        user_info = ctk.CTkLabel(
-            self.sidebar_frame,
-            text=f"{self.current_user.get('full_name', self.current_user.get('username'))}\n{self.current_user.get('role')}",
-            font=ctk.CTkFont(size=12),
-            justify="center"
-        )
-        user_info.pack(pady=(0, 20))
-        
-        profile_btn = ctk.CTkButton(
-            self.sidebar_frame,
-            text=" My Profile",
-            command=self.show_profile,
-            fg_color="#3498db",
-            hover_color="#2980b9",
-            height=40,
-            font=ctk.CTkFont(size=14, weight="bold")
-        )
-        profile_btn.pack(fill="x", padx=20, pady=(0, 15))
-
-        permissions = self.current_user.get('permissions', {})
-
-        self.create_sidebar_button("Dashboard", "dashboard")
-
-        if permissions.get('can_view_products', True) or self.current_user.get('role') == 'admin':
-            self.create_sidebar_button("Inventory", "inventory")
-
-        if permissions.get('can_create_invoices', True) or self.current_user.get('role') == 'admin':
-            self.create_sidebar_button("POS", "pos")
-
-        if permissions.get('can_view_invoices', True) or self.current_user.get('role') == 'admin':
-            self.create_sidebar_button("Purchases", "purchase")
-
-        if permissions.get('can_view_accounts', True) or self.current_user.get('role') == 'admin':
-            self.create_sidebar_button("Accounts", "accounts")
-
-        if permissions.get('can_view_reports', True) or self.current_user.get('role') == 'admin':
-            self.create_sidebar_button("Cashbox", "cashbox")
-            self.create_sidebar_button("Reports", "reports")
-
-        if permissions.get('can_manage_users', False) or self.current_user.get('role') == 'admin':
-            self.create_sidebar_button("Manage Users", "manage_users")
-
-        ctk.CTkButton(
-            self.sidebar_frame,
-            text="Logout",
-            command=self.logout,
-            fg_color="red",
-            hover_color="darkred",
-            height=40
-        ).pack(side="bottom", pady=20, padx=20, fill="x")
     
 
     def show_profile(self):
