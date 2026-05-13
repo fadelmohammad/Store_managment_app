@@ -15,12 +15,13 @@ class CashboxFrame(ctk.CTkFrame):
         self.expected_cash = 0.0
 
         # --- NAVIGATION BAR ---
-        nav_bar = ctk.CTkFrame(self, fg_color="transparent")
-        nav_bar.pack(side="top", fill="x", padx=10, pady=5)
-
-        ctk.CTkButton(nav_bar, text="Back", width=100, fg_color="#444444", hover_color="#555555",
-                      command=self.app.go_back).pack(side="left", padx=5)
-        ctk.CTkButton(nav_bar, text="Home", width=100, command=self.app.go_home).pack(side="left", padx=5)
+        nav_bar = self.app.ui_service.create_back_home_nav(
+            self,
+            back_text="Back",
+            home_text="Home",
+            back_command=self.app.go_back,
+            home_command=self.app.go_home,
+        )
 
         ctk.CTkLabel(nav_bar, text="Cash Management", font=("Arial", 16, "bold")).pack(side="right", padx=20)
         ctk.CTkLabel(self, text="Register & Cashbox", font=ctk.CTkFont(size=22, weight="bold")).pack(pady=10)
