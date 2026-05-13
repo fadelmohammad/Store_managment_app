@@ -1,7 +1,7 @@
 # services/user_service.py
 
-import hashlib
 from database.repositories.user_repo import UserRepository
+from services.password_service import hash_password_pbkdf2, verify_password
 
 
 class UserService:
@@ -9,7 +9,7 @@ class UserService:
         self.repo = UserRepository(conn)
 
     def hash_password(self, password):
-        return hashlib.sha256(password.encode()).hexdigest()
+        return hash_password_pbkdf2(password)
 
     def get_user_profile(self, user_id):
         user = self.repo.get_by_id(user_id)
@@ -35,7 +35,11 @@ class UserService:
                 raise ValueError("Please enter your current password to change password")
 
             stored = self.repo.get_password(user_id)
-            if not stored or stored != self.hash_password(current_password):
+            if not stored:
+                raise ValueError("Current password is incorrect")
+
+            ok, _ = verify_password(stored, current_password)
+            if not ok:
                 raise ValueError("Current password is incorrect")
 
             if len(new_password) < 4:
