@@ -10,49 +10,30 @@
 - [x] `reports_module.py` uses `report_service` for report data (UI builds from service results)
 - [x] `dashboard.py` uses `report_service` for dashboard metrics/charts
 - [x] `cashbox_module.py` uses `ledger_service` only (reads + writes go through `LedgerService`)
-
----
-
-## Up Next (Priority Order)
-
-- [x] Verify `accounts_module.py`
-  - UI uses `account_service` only (no direct DB calls)
-
-- [x] Verify `purchase_service.py` ledger integration
-  - Journal writes go through `PurchaseService` → `LedgerService` → `LedgerRepository` ✅
-  - No legacy raw DB journal writes found in the purchase path
-
-- [x] Verify `report_repo.py` query coverage + output shape consistency
-  - `report_repo.py` implements all methods used by `report_service.py` ✅
-  - Note: UI still has dict-vs-tuple branching; next item handles normalization
-
-- [x] Harden `safe_eval.py` (small hardening only)
-  - Add limits:
-    - maximum expression length
-    - maximum exponent magnitude / result bounds for `**`
-  - Keep AST-only evaluation (no `eval`/`exec`)
-
-- [x] Reduce dict-vs-tuple branching in UI
-  - Invoice UI now receives normalized dict-like rows from `InvoiceService` (so the UI can rely on `keys()` without tuple fallbacks).
-
-- [ ] Split `main.py` god object (refactor)
-  - Separate: wiring/container setup, routing/frame management, and sidebar logic
+- [x] Verified `accounts_module.py` uses `account_service` only (no direct DB calls)
+- [x] Verified `purchase_service.py` ledger integration path
+- [x] Report repo query coverage + output shape consistency checks
+- [x] Harden `safe_eval.py` (already hardened with AST + limits)
+- [x] Reduce dict-vs-tuple branching (UI invoice flow normalization already handled)
+- [x] Added global `UIService` (`services/ui/ui_service.py`)
+- [x] Wired `UIService` into `main.StoreApp` (`self.ui_service = UIService(self)`)
+- [x] Refactored nav bars to use `UIService`
+  - [x] Accounts (`ui/accounts_module.py`)
+  - [x] POS (`ui/pos_module.py`)
+  - [x] Purchase (`ui/purchase_module.py`)
+  - [x] Cashbox (`ui/cashbox_module.py`)
+  - [x] Reports (`ui/reports_module.py`)
+- [x] Split `main.py` god object: moved routing/frame management to `services/ui/frame_router.py`
+- [x] Fixed `FrameRouter.init_frames()` to correctly construct frames (mirrors old `main.init_frames()`)
+- [x] Compilation sanity checks (`py_compile`) for modified files
+- [x] Manual runtime smoke verification (dashboard/accounts/pos/purchase/cashbox/reports) → Back/Home works, no “Frame not found” errors
 
 ---
 
 ## Backlog
 
 - [ ] Consolidate UI constants (colors/fonts/sizes)
-  - Reduce repeated hex color strings across UI modules
-
 - [ ] Session hardening
-  - Add expiry + integrity (at minimum), or switch to token-based storage
-
 - [ ] Brute-force / lockout protection on failed logins
-  - Add rate limiting / lockout in `login_service` and/or `user_repo`
-
 - [ ] Remove/clean unused/empty legacy files
-  - e.g. check `invoice_repo.py` (empty) and legacy DB artifacts
-
 - [ ] PEP8 / cleanup sweep
-  - Fix remaining minor style issues that surfaced during migrations
