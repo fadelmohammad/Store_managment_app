@@ -12,28 +12,12 @@ class AccountsFrame(ctk.CTkFrame):
         self.selected_account_id = None
 
         # --- NAVIGATION BAR ---
-        nav_bar = ctk.CTkFrame(self, fg_color="transparent")
-        nav_bar.pack(side="top", fill="x", padx=10, pady=5)
-
-        ctk.CTkButton(
+        nav_bar = self.app.ui_service.create_back_home_nav(self, back_text="Back", home_text="Home")
+        ctk.CTkLabel(
             nav_bar,
-            text="Back",
-            width=100,
-            fg_color="#444444",
-            hover_color="#555555",
-            command=self.app.go_back,
-        ).pack(side="left", padx=5)
-
-        ctk.CTkButton(
-            nav_bar,
-            text="Home",
-            width=100,
-            command=self.app.go_home,
-        ).pack(side="left", padx=5)
-
-        ctk.CTkLabel(nav_bar, text="Partner Management", font=("Arial", 16, "bold")).pack(
-            side="right", padx=20
-        )
+            text="Partner Management",
+            font=("Arial", 16, "bold"),
+        ).pack(side="right", padx=20)
 
         # --- MAIN LAYOUT ---
         pane = ctk.CTkFrame(self)
