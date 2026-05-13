@@ -29,15 +29,17 @@ from services.invoices_service import InvoiceService
 from ui.sidebar_builder import build_sidebar
 
 from ui.dashboard import DashboardFrame
-from inventory_module import InventoryFrame
+from ui.inventory_module import InventoryFrame
 from ui.pos_module import POSFrame
-from purchase_module import PurchaseFrame
+from ui.purchase_module import PurchaseFrame
 from ui.accounts_module import AccountsFrame
 from ui.cashbox_module import CashboxFrame
 from ui.reports_module import ReportsFrame
-from login_module import LoginFrame
-from user_profile import UserProfileFrame
-from user_management_module import UserManagementFrame
+from ui.login_module import LoginFrame
+from ui.user_profile import UserProfileFrame
+from ui.user_management_module import UserManagementFrame
+from services.ui.ui_service import UIService
+from services.ui.frame_router import FrameRouter
 
 
 class StoreApp(ctk.CTk):
@@ -75,11 +77,17 @@ class StoreApp(ctk.CTk):
         )
 
         ctk.set_appearance_mode("dark")
-        ctk.set_default_color_theme("blue")
+        ctk.set_default_color_theme("ui/themes/orange.json")
 
         self.title("OmniPOS - Advanced Store Management")
         self.geometry("1400x900")
         self.protocol("WM_DELETE_WINDOW", self.on_close)
+
+        # Global UI helpers (shared UI actions across frames)
+        self.ui_service = UIService(self)
+
+        # Route/state manager (extracts frame routing logic out of StoreApp)
+        self.frame_router = FrameRouter(self)
 
         self.ledger_service = LedgerService(self.conn)
         self.sales_service = SalesService(self.conn, self.ledger_service)
@@ -182,70 +190,40 @@ class StoreApp(ctk.CTk):
         button.pack(fill="x", padx=10, pady=5)
 
     def init_frames(self):
-        permissions = self.current_user.get('permissions', {})
-        
-        self.frames["dashboard"] = DashboardFrame(self.main_content_frame, self)
-        self.frames["profile"] = UserProfileFrame(self.main_content_frame, self, self.user_service, self.current_user, self.update_user_info)
-        
-        if permissions.get('can_view_products', True) or self.current_user.get('role') == 'admin':
-            self.frames["inventory"] = InventoryFrame(self.main_content_frame, self)
-        
-        if permissions.get('can_create_invoices', True) or self.current_user.get('role') == 'admin':
-            self.frames["pos"] = POSFrame(self.main_content_frame, self, self.sales_service, self.account_service, self.inventory_service)
-        
-        if permissions.get('can_view_invoices', True) or self.current_user.get('role') == 'admin':
-            self.frames["purchase"] = PurchaseFrame(
-                self.main_content_frame,
-                self,
-                self.conn,
-                self.purchase_service,
-                self.account_service,
-                self.inventory_service,
-            )
-        
-        if permissions.get('can_view_accounts', True) or self.current_user.get('role') == 'admin':
-            self.frames["accounts"] = AccountsFrame(self.main_content_frame, self, self.account_service)
-        
-        if permissions.get('can_view_reports', True) or self.current_user.get('role') == 'admin':
-            self.frames["cashbox"] = CashboxFrame(self.main_content_frame, self, self.ledger_service)
-            self.frames["reports"] = ReportsFrame(self.main_content_frame, self, self.conn)
-        
-        if permissions.get('can_manage_users', False) or self.current_user.get('role') == 'admin':
-            self.frames["manage_users"] = UserManagementFrame(self.main_content_frame, self, self.user_service, self.current_user)
+        self.frame_router.init_frames()
+
+        # Sync legacy attributes for compatibility
+        self.frames = self.frame_router.frames
+        self.current_frame = self.frame_router.current_frame
+        self.current_frame_name = self.frame_router.current_frame_name
+        self.history = self.frame_router.history
 
     def show_frame(self, name, save_history=True):
-        if self.current_frame_name == name:
-            return
+        self.frame_router.show_frame(name, save_history=save_history)
 
-        if self.current_frame and save_history:
-            self.history.append(self.current_frame_name)
-
-        if self.current_frame:
-            self.current_frame.pack_forget()
-
-        frame = self.frames.get(name)
-        if frame:
-            frame.pack(fill="both", expand=True)
-            self.current_frame = frame
-            self.current_frame_name = name
-
-            if hasattr(frame, "refresh_data"):
-                frame.refresh_data()
-        else:
-            logging.error(f"Error: Frame '{name}' not found.")
-            if name != "manage_users":
-                self.frames["dashboard"].pack(fill="both", expand=True)
-                self.current_frame = self.frames["dashboard"]
-                self.current_frame_name = "dashboard"
+        # Sync legacy attributes for compatibility
+        self.frames = self.frame_router.frames
+        self.current_frame = self.frame_router.current_frame
+        self.current_frame_name = self.frame_router.current_frame_name
+        self.history = self.frame_router.history
 
     def go_back(self):
-        if self.history:
-            prev_frame = self.history.pop()
-            self.show_frame(prev_frame, save_history=False)
+        self.frame_router.go_back()
+
+        # Sync legacy attributes for compatibility
+        self.frames = self.frame_router.frames
+        self.current_frame = self.frame_router.current_frame
+        self.current_frame_name = self.frame_router.current_frame_name
+        self.history = self.frame_router.history
 
     def go_home(self):
-        self.history = []
-        self.show_frame("dashboard", save_history=False)
+        self.frame_router.go_home()
+
+        # Sync legacy attributes for compatibility
+        self.frames = self.frame_router.frames
+        self.current_frame = self.frame_router.current_frame
+        self.current_frame_name = self.frame_router.current_frame_name
+        self.history = self.frame_router.history
 
     def logout(self):
         if messagebox.askyesno("Confirm", "Do you want to logout?"):
