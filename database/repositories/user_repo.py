@@ -25,7 +25,7 @@ class UserRepository:
 
     def get_by_username(self, username):
         return self.conn.execute(
-            "SELECT id, username, full_name, is_active FROM users WHERE username = ?",
+            "SELECT id, username, full_name, role, is_active FROM users WHERE username = ?",
             (username,),
         ).fetchone()
 
