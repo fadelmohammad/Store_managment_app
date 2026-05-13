@@ -1,6 +1,6 @@
 # init_db.py
 import sqlite3
-from schema import initialize_database
+from database.schema import initialize_database
 
 if __name__ == "__main__":
     DB_NAME = "POS.db"

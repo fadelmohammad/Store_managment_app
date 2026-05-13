@@ -3,6 +3,9 @@
 import sqlite3
 import logging
 import hashlib
+import os
+
+logger = logging.getLogger(__name__)
 
 def create_tables(conn):
     # Using context manager to ensure all tables are created safely
@@ -129,6 +132,7 @@ def create_tables(conn):
             "CREATE INDEX IF NOT EXISTS idx_invoice_partner ON invoices(partner_id)"
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_invoice_type ON invoices(type)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_invoices_type_date ON invoices(type, date)")
         
         # Performance indexes for 1000+ products
         conn.execute("CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id)")
@@ -239,9 +243,14 @@ def seed_permissions(conn):
 
 def create_admin_user(conn):
  
-    def hash_password(password):
-        return hashlib.sha256(password.encode()).hexdigest()
-    
+    def hash_password(password: str) -> str:
+        # PBKDF2 salted format:
+        #   pbkdf2$<iterations>$<salt_hex>$<hash_hex>
+        iterations = 200_000
+        salt = os.urandom(16)
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations, dklen=32)
+        return f"pbkdf2${iterations}${salt.hex()}${dk.hex()}"
+
     admin_pass = hash_password("123456")
     with conn:
         conn.execute("""
@@ -281,19 +290,19 @@ def initialize_database(db_path="POS.db"):
     conn = sqlite3.connect(db_path)
     try:
         create_tables(conn)
-        
+
         seed_ledger_accounts(conn)
         seed_permissions(conn)
         create_admin_user(conn)
         insert_dummy_data(conn)
-        
-        print("تم تهيئة قاعدة البيانات بنجاح!")
-        print(" المستخدم الافتراضي: admin")
-        print(" كلمة المرور: 123456")
-        
+
+        logger.info("تم تهيئة قاعدة البيانات بنجاح!")
+        logger.info("المستخدم الافتراضي: admin")
+        logger.info("كلمة المرور الافتراضية: 123456")
+
         return conn
     except Exception as e:
-        print(f" خطأ في تهيئة قاعدة البيانات: {e}")
+        logger.exception("خطأ في تهيئة قاعدة البيانات")
         raise
     finally:
         conn.close()
