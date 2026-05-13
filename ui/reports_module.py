@@ -13,12 +13,13 @@ class ReportsFrame(ctk.CTkFrame):
         # All report data must come via report_service (UI → service → repo → DB).
 
         # --- NAVIGATION BAR ---
-        nav_bar = ctk.CTkFrame(self, fg_color="transparent")
-        nav_bar.pack(side="top", fill="x", padx=10, pady=5)
-
-        ctk.CTkButton(nav_bar, text="Back", width=100, fg_color="#444444", hover_color="#555555",
-                      command=self.app.go_back).pack(side="left", padx=5)
-        ctk.CTkButton(nav_bar, text="Home", width=100, command=self.app.go_home).pack(side="left", padx=5)
+        nav_bar = self.app.ui_service.create_back_home_nav(
+            self,
+            back_text="Back",
+            home_text="Home",
+            back_command=self.app.go_back,
+            home_command=self.app.go_home,
+        )
 
         # Date Filter
         self.period_var = ctk.StringVar(value="All Time")
