@@ -142,6 +142,7 @@ class InventoryFrame(ctk.CTkFrame):
         v_scrollbar.pack(side="left", fill="y")
         
         self.tree.bind("<<TreeviewSelect>>", self.on_product_select)
+        self.tree.bind("<Double-1>", self.on_product_double_click)
         
         # Pagination buttons
         pag_frame = ctk.CTkFrame(left_panel, fg_color="transparent")
@@ -170,21 +171,11 @@ class InventoryFrame(ctk.CTkFrame):
         right_panel = ctk.CTkScrollableFrame(pane, width=320)
         right_panel.pack(side="right", fill="y", padx=(10, 0))
 
-        ctk.CTkLabel(
-            right_panel, text="Product Details", font=("Arial", 18, "bold")
-        ).pack(pady=20)
+        # Mapping to store ID vs Path for the database (used by popup CRUD form)
+        self.cat_map = {}
+        self.refresh_category_list()
 
-        self.name_entry = self.create_input(right_panel, "Product Name")
-        
-        # Category Text Entry Dropdown
-        ctk.CTkLabel(right_panel, text="Category").pack(anchor="w", padx=25)
-        self.category_var = ctk.StringVar(value="Select Category")
-        self.cat_dropdown = ctk.CTkOptionMenu(
-            right_panel, variable=self.category_var, values=[]
-        )
-        self.cat_dropdown.pack(fill="x", padx=25, pady=(0, 5))
-        
-        # Helper button to add new categories on the fly
+        # Categories helper (kept visible, but without inline product fields)
         ctk.CTkButton(
             right_panel,
             text="+ Manage Categories",
@@ -192,41 +183,14 @@ class InventoryFrame(ctk.CTkFrame):
             fg_color="#34495e",
             command=self.open_category_window,
         ).pack(padx=25, pady=(0, 10))
-        
-        self.cost_entry = self.create_input(right_panel, "Unit Cost ($)")
-        self.price_entry = self.create_input(right_panel, "Retail Price ($)")
-        self.qty_entry = self.create_input(right_panel, "Current Stock")
-        self.min_entry = self.create_input(right_panel, "Min Threshold (Alert)")
 
-        # Mapping to store ID vs Path for the database
-        self.cat_map = {}
-        self.refresh_category_list()
-
-        # Buttons
+        # Buttons area (CRUD is popup-only now)
         btn_frame = ctk.CTkFrame(right_panel, fg_color="transparent")
-        btn_frame.pack(fill="x", pady=20, padx=25)
+        btn_frame.pack(fill="x", pady=10, padx=25)
 
         ctk.CTkButton(
             btn_frame, text="Add Product", fg_color="#27ae60", command=self.add_product
         ).pack(fill="x", pady=5)
-        
-        ctk.CTkButton(
-            btn_frame,
-            text="Update Selected",
-            fg_color="#2980b9",
-            command=self.update_product,
-        ).pack(fill="x", pady=5)
-        
-        ctk.CTkButton(
-            btn_frame,
-            text="Delete Product",
-            fg_color="#e74c3c",
-            command=self.delete_product,
-        ).pack(fill="x", pady=20)
-        
-        ctk.CTkButton(
-            btn_frame, text="Clear", fg_color="#7f8c8d", command=self.clear_form
-        ).pack(fill="x")
 
         ctk.CTkButton(
             btn_frame,
@@ -234,7 +198,9 @@ class InventoryFrame(ctk.CTkFrame):
             fg_color="#8e44ad",
             hover_color="#9b59b6",
             command=self.show_stock_history,
-        ).pack(fill="x", pady=(5, 20))
+        ).pack(fill="x", pady=(10, 20))
+
+        # NOTE: Inline product inputs are intentionally removed (popup-only CRUD).
 
         # Bulk Price Adjustments
         ctk.CTkLabel(
@@ -322,7 +288,7 @@ class InventoryFrame(ctk.CTkFrame):
 
     def open_category_window(self):
         """Open category management window"""
-        from category_module import CategoryManagementWindow
+        from ui.category_module import CategoryManagementWindow
         
         CategoryManagementWindow(
             parent=self,
@@ -341,8 +307,10 @@ class InventoryFrame(ctk.CTkFrame):
             if not cats:
                 logging.warning("No categories found! Check database.")
                 self.cat_map = {}
-                self.cat_dropdown.configure(values=["No Categories"])
-                self.category_filter_dropdown.configure(values=["All"])
+                if hasattr(self, "cat_dropdown"):
+                    self.cat_dropdown.configure(values=["No Categories"])
+                if hasattr(self, "category_filter_dropdown"):
+                    self.category_filter_dropdown.configure(values=["All"])
                 return
             
             self.cat_map = {}
@@ -355,13 +323,17 @@ class InventoryFrame(ctk.CTkFrame):
             paths = list(self.cat_map.keys())
             filter_paths = ["All"] + paths
             logging.debug(f"Dropdown values: {paths}")
-            self.cat_dropdown.configure(values=paths if paths else ["No Categories"])
-            self.category_filter_dropdown.configure(values=filter_paths)
+            if hasattr(self, "cat_dropdown"):
+                self.cat_dropdown.configure(values=paths if paths else ["No Categories"])
+            if hasattr(self, "category_filter_dropdown"):
+                self.category_filter_dropdown.configure(values=filter_paths)
             
         except Exception as e:
             logging.error(f"Error in refresh_category_list: {e}", exc_info=True)
-            self.cat_dropdown.configure(values=["Error loading categories"])
-            self.category_filter_dropdown.configure(values=["All"])
+            if hasattr(self, "cat_dropdown"):
+                self.cat_dropdown.configure(values=["Error loading categories"])
+            if hasattr(self, "category_filter_dropdown"):
+                self.category_filter_dropdown.configure(values=["All"])
 
     # ==========================================
     # Filtering, Sorting & Pagination
@@ -505,21 +477,23 @@ class InventoryFrame(ctk.CTkFrame):
     # ==========================================
 
     def on_product_select(self, event):
-        """Handle product selection from tree"""
+        """Handle product selection from tree (popup-only mode)."""
         sel = self.tree.selection()
         if not sel:
             return
         self.selected_product_id = sel[0]
-        p = self.app.inventory_service.get_product_by_id(self.selected_product_id)
-        if p:
-            self.clear_form(keep_id=True)
-            self.name_entry.insert(0, p.get("name", ""))
-            full_path = self.app.inventory_service.get_category_path(p.get("category_id"))
-            self.category_var.set(full_path if full_path else "Select Category")
-            self.cost_entry.insert(0, str(p.get("cost", "")))
-            self.price_entry.insert(0, str(p.get("price", "")))
-            self.qty_entry.insert(0, str(p.get("quantity", "")))
-            self.min_entry.insert(0, str(p.get("min_threshold", "5")))
+
+    def on_product_double_click(self, _event):
+        """Double-click opens popup with Update + Delete."""
+        sel = self.tree.selection()
+        if sel:
+            self.selected_product_id = sel[0]
+
+        if self.selected_product_id is None:
+            return
+
+        # Defensive: always pass correct mode first.
+        self.open_product_edit_popup("EDIT", self.selected_product_id)
 
     def clear_form(self, keep_id=False):
         """Clear form fields"""
@@ -539,7 +513,7 @@ class InventoryFrame(ctk.CTkFrame):
         self.category_var.set("Select Category")
 
     def get_form_data(self):
-        """Get form data as tuple"""
+        """Get form data as tuple (legacy; popup form uses its own inputs)."""
         selected_path = self.category_var.get()
         cat_id = self.cat_map.get(selected_path, None)
 
@@ -552,48 +526,171 @@ class InventoryFrame(ctk.CTkFrame):
             int(self.min_entry.get() or 5),
         )
 
-    def add_product(self):
-        """Add new product"""
+    # ==========================================
+    # Popup CRUD (Add/Update/Delete)
+    # ==========================================
+
+    def open_product_edit_popup(self, mode: str, product_id=None):
+        """
+        mode:
+          - "ADD": popup for creating a product (Add button only)
+          - "EDIT": popup for updating/deleting an existing product
+        """
+        # Defensive: sometimes Tkinter callbacks end up passing wrong args (e.g. mode=1).
+        if not isinstance(mode, str):
+            mode = "EDIT"
+
+        if mode not in {"ADD", "EDIT"}:
+            mode = "EDIT"
+
+        product = None
+        if mode == "EDIT":
+            if product_id is None:
+                messagebox.showwarning("Selection Required", "Please select a product first.", parent=self)
+                return
+            product = self.app.inventory_service.get_product_by_id(product_id)
+            if not product:
+                messagebox.showerror("Error", "Product not found.", parent=self)
+                return
+
+        win = ctk.CTkToplevel(self)
+        win.title("Add Product" if mode == "ADD" else "Edit Product")
+        win.geometry("460x640")
+        win.resizable(False, False)
+        win.attributes("-topmost", True)
+        # win.grab_set()  # removing focus grab to ensure CTk buttons are clickable
+
+        title_txt = "Add Product" if mode == "ADD" else f"Edit: {product.get('name', '')}"
+        ctk.CTkLabel(win, text=title_txt, font=("Arial", 16, "bold")).pack(pady=(16, 8))
+
+        # variables
+        name_var = ctk.StringVar(value=(product.get("name", "") if product else ""))
+        price_var = ctk.StringVar(value=str(product.get("price", 0) if product else 0))
+        cost_var = ctk.StringVar(value=str(product.get("cost", 0) if product else 0))
+        qty_var = ctk.StringVar(value=str(product.get("quantity", 0) if product else 0))
+        min_var = ctk.StringVar(value=str(product.get("min_threshold", 5) if product else 5))
+        category_var = ctk.StringVar(
+            value=(product.get("category_path") if product and product.get("category_path") else "Select Category")
+        )
+
+        # category dropdown values from current map keys
+        category_values = list(self.cat_map.keys()) if self.cat_map else ["Select Category"]
+
+        def labeled(parent, label: str, var: ctk.StringVar):
+            ctk.CTkLabel(parent, text=label).pack(anchor="w", padx=20, pady=(8, 3))
+            e = ctk.CTkEntry(parent, textvariable=var)
+            e.pack(fill="x", padx=20)
+            return e
+
+        if not category_values:
+            category_values = ["Select Category"]
+
+        # category
+        ctk.CTkLabel(win, text="Category").pack(anchor="w", padx=20, pady=(10, 3))
+        cat_dd = ctk.CTkOptionMenu(win, variable=category_var, values=category_values, width=330)
+        cat_dd.pack(fill="x", padx=20)
+
+        ctk.CTkButton(
+            win,
+            text="+ Manage Categories",
+            height=28,
+            fg_color="#34495e",
+            command=self.open_category_window,
+        ).pack(padx=20, pady=(6, 10), fill="x")
+
+        # fields
+        labeled(win, "Product Name", name_var)
+        labeled(win, "Retail Price ($)", price_var)
+        labeled(win, "Unit Cost ($)", cost_var)
+        labeled(win, "Current Stock", qty_var)
+        labeled(win, "Min Threshold (Alert)", min_var)
+
+        actions = ctk.CTkFrame(win, fg_color="transparent")
+        actions.pack(fill="x", padx=20, pady=(16, 6))
+
+        def read_validate():
+            name = name_var.get().strip()
+            if not name:
+                raise ValueError("Product name is required")
+
+            selected_path = category_var.get()
+            cat_id = self.cat_map.get(selected_path, None)
+
+            price = float(price_var.get() or 0)
+            cost = float(cost_var.get() or 0)
+            qty = int(float(qty_var.get() or 0))
+            min_threshold = int(float(min_var.get() or 5))
+
+            if qty < 0:
+                raise ValueError("Quantity cannot be negative")
+            if min_threshold < 0:
+                raise ValueError("Min threshold cannot be negative")
+
+            return name, cat_id, price, cost, qty, min_threshold
+
+        def on_add():
+            try:
+                name, cat_id, price, cost, qty, min_threshold = read_validate()
+                self.app.inventory_service.add_product(name, cat_id, price, cost, qty, min_threshold)
+                self.refresh_data()
+                self.update_alert_label()
+                win.destroy()
+                messagebox.showinfo("Success", "Product added successfully.", parent=self)
+            except Exception as e:
+                messagebox.showerror("Error", str(e), parent=win)
+
+        def on_update():
+            try:
+                name, cat_id, price, cost, qty, min_threshold = read_validate()
+                self.app.inventory_service.update_product(product["id"], name, cat_id, price, cost, qty, min_threshold)
+                self.refresh_data()
+                self.update_alert_label()
+                win.destroy()
+                messagebox.showinfo("Success", "Product updated successfully.", parent=self)
+            except Exception as e:
+                messagebox.showerror("Error", str(e), parent=win)
+
+        def on_delete():
+            if not messagebox.askyesno(
+                "Confirm Delete",
+                f"Delete '{product.get('name', '')}'?",
+                parent=win,
+            ):
+                return
+            try:
+                self.app.inventory_service.delete_product(product["id"])
+                self.refresh_data()
+                self.update_alert_label()
+                win.destroy()
+                messagebox.showinfo("Success", "Product deleted successfully.", parent=self)
+            except Exception as e:
+                messagebox.showerror("Error", str(e), parent=win)
+
+        if mode == "ADD":
+            ctk.CTkButton(actions, text="Add", fg_color="#27ae60", command=on_add).pack(fill="x", pady=6)
+        else:
+            ctk.CTkButton(actions, text="Update", fg_color="#2980b9", command=on_update).pack(fill="x", pady=6)
+            ctk.CTkButton(actions, text="Delete", fg_color="#e74c3c", command=on_delete).pack(fill="x", pady=6)
+
+        ctk.CTkButton(actions, text="Cancel", fg_color="#7f8c8d", command=win.destroy).pack(fill="x", pady=(6, 0))
+
+        # focus helper
         try:
-            data = self.get_form_data()
-            self.app.inventory_service.add_product(*data)
-            self.refresh_data()
-            self.clear_form()
-            self.update_alert_label()
-            messagebox.showinfo("Success", "Product added successfully.")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
+            win.after(50, lambda: win.focus_force())
+        except Exception:
+            pass
+
+    def add_product(self):
+        """Add product via popup (same form)."""
+        self.open_product_edit_popup("ADD")
 
     def update_product(self):
-        """Update selected product"""
-        if not self.selected_product_id:
-            messagebox.showwarning(
-                "Selection Required", "Please select a product from the list first."
-            )
-            return
-            
-        try:
-            data = self.get_form_data()
-            self.app.inventory_service.update_product(self.selected_product_id, *data)
-            self.refresh_data()
-            self.update_alert_label()
-            messagebox.showinfo("Success", "Product updated successfully.")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
+        """Update selected product via popup."""
+        self.open_product_edit_popup("EDIT", self.selected_product_id)
 
     def delete_product(self):
-        """Delete selected product"""
-        if not self.selected_product_id:
-            messagebox.showwarning(
-                "Selection Required", "Please select a product from the list first."
-            )
-            return
-
-        if messagebox.askyesno("Confirm Delete", "Delete this product?"):
-            self.app.inventory_service.delete_product(self.selected_product_id)
-            self.refresh_data()
-            self.clear_form()
-            self.update_alert_label()
+        """Delete selected product via popup."""
+        self.open_product_edit_popup("EDIT", self.selected_product_id)
 
     # ==========================================
     # Bulk Operations
@@ -728,7 +825,8 @@ class InventoryFrame(ctk.CTkFrame):
             )
             return
 
-        product_name = self.name_entry.get()
+        product = self.app.inventory_service.get_product_by_id(self.selected_product_id) or {}
+        product_name = product.get("name", "Product")
         history_data = self.app.inventory_service.get_product_history(self.selected_product_id)
 
         history_win = ctk.CTkToplevel(self)
