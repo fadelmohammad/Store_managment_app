@@ -6,7 +6,8 @@ import tkinter as tk
 import logging
 import tkinter.messagebox as messagebox
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+from logger import setup_logging
+setup_logging()
 from database.connection import DatabaseConnection
 from database.schema import create_tables, seed_ledger_accounts, insert_dummy_data, seed_permissions, create_admin_user
 from database.repositories.product_repo import ProductRepository
@@ -26,6 +27,7 @@ from services.accounts_service import AccountService
 from services.user_service import UserService
 from services.login_service import LoginService
 from services.invoices_service import InvoiceService
+from database.backup_service import BackupService
 from ui.sidebar_builder import build_sidebar
 
 from ui.dashboard import DashboardFrame
@@ -92,6 +94,12 @@ class StoreApp(ctk.CTk):
         self.ledger_service = LedgerService(self.conn)
         self.sales_service = SalesService(self.conn, self.ledger_service)
         self.purchase_service = PurchaseService(self.purchase_repo, self.product_repo, self.stock_repo, self.inventory_service, self.ledger_service, self.account_repo)
+
+        self.backup_service = BackupService()
+        try:
+            self.backup_service.auto_backup()
+        except Exception as e:
+            logging.warning(f"Auto-backup failed: {e}")
 
         saved_rate = self.setting_repo.get("exchange_rate", "15000")
         self.exchange_rate = float(saved_rate)

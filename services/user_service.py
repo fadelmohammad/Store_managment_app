@@ -16,12 +16,12 @@ class UserService:
         if not user:
             return None
         return {
-            "username": user[1],
-            "full_name": user[2],
-            "role": user[3],
-            "is_active": user[4],
-            "last_login": user[5] or "Never",
-            "created_at": user[6] or "Unknown",
+            "username": user["username"],
+            "full_name": user["full_name"],
+            "role": user["role"],
+            "is_active": user["is_active"],
+            "last_login": user["last_login"] or "Never",
+            "created_at": user["created_at"] or "Unknown",
         }
 
     def update_own_profile(self, user_id, new_full_name, current_password, new_password, confirm_password):

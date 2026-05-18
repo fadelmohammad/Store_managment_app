@@ -26,23 +26,22 @@ class LedgerRepository:
         return float(row["balance"] or 0.0)
 
     def create_entry(self, description, reference_id, lines) -> int:
-        with self.conn:
-            cursor = self.conn.execute(
-                "INSERT INTO journal_entries (date, description, reference_id) VALUES (datetime('now'), ?, ?)",
-                (description, reference_id),
-            )
-            entry_id = cursor.lastrowid
+        cursor = self.conn.execute(
+            "INSERT INTO journal_entries (date, description, reference_id) VALUES (datetime('now'), ?, ?)",
+            (description, reference_id),
+        )
+        entry_id = cursor.lastrowid
 
-            for line in lines:
-                result = self.conn.execute(
-                    "SELECT id FROM accounts_ledger WHERE name = ?", (line["account"],)
-                ).fetchone()
-                if not result:
-                    raise ValueError(f"Ledger account not found: {line['account']}")
-                self.conn.execute(
-                    "INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES (?, ?, ?, ?)",
-                    (entry_id, result[0], line["debit"], line["credit"]),
-                )
+        for line in lines:
+            result = self.conn.execute(
+                "SELECT id FROM accounts_ledger WHERE name = ?", (line["account"],)
+            ).fetchone()
+            if not result:
+                raise ValueError(f"Ledger account not found: {line['account']}")
+            self.conn.execute(
+                "INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES (?, ?, ?, ?)",
+                (entry_id, result[0], line["debit"], line["credit"]),
+            )
         return entry_id
 
     def get_recent_cash_transactions(self, limit: int = 20) -> List[Dict]:

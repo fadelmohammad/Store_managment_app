@@ -5,11 +5,11 @@ class PurchaseRepository:
     def __init__(self, conn):
         self.conn = conn
 
-    def create_invoice(self, partner_id, total_usd, tax, discount, payment_method):
+    def create_invoice(self, partner_id, total_usd, total_syp, exchange_rate, tax, discount, payment_method):
         cursor = self.conn.execute("""
-            INSERT INTO invoices (type, date, partner_id, total, tax, discount, payment_method, status)
-            VALUES ('PURCHASE', datetime('now'), ?, ?, ?, ?, ?, 'Completed')
-        """, (partner_id, total_usd, tax, discount, payment_method))
+            INSERT INTO invoices (type, date, partner_id, total, total_syp, rate_at_time, tax, discount, payment_method, status)
+            VALUES ('PURCHASE', datetime('now'), ?, ?, ?, ?, ?, ?, ?, 'Completed')
+        """, (partner_id, total_usd, total_syp, exchange_rate, tax, discount, payment_method))
         return cursor.lastrowid
 
     def add_invoice_item(self, invoice_id, product_id, quantity, price):

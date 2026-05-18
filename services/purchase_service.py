@@ -21,9 +21,10 @@ class PurchaseService:
             tax = subtotal * tax_pct
             discount = subtotal * discount_pct
             total_usd = (subtotal - discount) + tax
+            total_syp = total_usd * exchange_rate
 
             invoice_id = self.purchase_repo.create_invoice(
-                partner_id, total_usd, tax, discount, payment_method
+                partner_id, total_usd, total_syp, exchange_rate, tax, discount, payment_method
             )
 
             for item in cart:

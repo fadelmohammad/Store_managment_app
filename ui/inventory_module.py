@@ -495,37 +495,6 @@ class InventoryFrame(ctk.CTkFrame):
         # Defensive: always pass correct mode first.
         self.open_product_edit_popup("EDIT", self.selected_product_id)
 
-    def clear_form(self, keep_id=False):
-        """Clear form fields"""
-        if not keep_id:
-            self.selected_product_id = None
-
-        entries = [
-            self.name_entry,
-            self.cost_entry,
-            self.price_entry,
-            self.qty_entry,
-            self.min_entry,
-        ]
-        for e in entries:
-            e.delete(0, "end")
-
-        self.category_var.set("Select Category")
-
-    def get_form_data(self):
-        """Get form data as tuple (legacy; popup form uses its own inputs)."""
-        selected_path = self.category_var.get()
-        cat_id = self.cat_map.get(selected_path, None)
-
-        return (
-            self.name_entry.get(),
-            cat_id,
-            float(self.price_entry.get() or 0),
-            float(self.cost_entry.get() or 0),
-            int(self.qty_entry.get() or 0),
-            int(self.min_entry.get() or 5),
-        )
-
     # ==========================================
     # Popup CRUD (Add/Update/Delete)
     # ==========================================
@@ -683,14 +652,6 @@ class InventoryFrame(ctk.CTkFrame):
     def add_product(self):
         """Add product via popup (same form)."""
         self.open_product_edit_popup("ADD")
-
-    def update_product(self):
-        """Update selected product via popup."""
-        self.open_product_edit_popup("EDIT", self.selected_product_id)
-
-    def delete_product(self):
-        """Delete selected product via popup."""
-        self.open_product_edit_popup("EDIT", self.selected_product_id)
 
     # ==========================================
     # Bulk Operations

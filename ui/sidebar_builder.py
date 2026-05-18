@@ -68,6 +68,9 @@ def build_sidebar(app, container, user, *, on_show_profile, on_logout, on_show_f
     if permissions.get("can_manage_users", False) or user.get("role") == "admin":
         create_button("Manage Users", "manage_users")
 
+    if permissions.get("can_manage_settings", False) or user.get("role") == "admin":
+        create_button("Backup & Restore", "backup")
+
     # Logout at bottom
     ctk.CTkButton(
         container,

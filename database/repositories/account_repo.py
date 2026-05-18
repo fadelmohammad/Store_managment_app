@@ -1,46 +1,26 @@
 # account_repo.py
 
-import logging
 
 class AccountRepository:
     def __init__(self, conn):
         self.conn = conn
 
     def get_by_id(self, account_id):
-        """Fetches account details by ID."""
         return self.conn.execute(
             "SELECT * FROM accounts WHERE id = ?", (account_id,)
         ).fetchone()
 
-
     def get_by_role(self, role):
-        """Fetches account details by ROLE."""
-        try:
-            results = self.conn.execute(
-                "SELECT * FROM accounts WHERE role = ? ORDER BY name", (role,)
-            ).fetchall()
-
-            logging.debug(f"get_by_role('{role}'): found {len(results)} accounts")
-
-            # Convert to list of dictionaries for easier access
-            formatted = [dict(row) for row in results]
-            return formatted
-        except Exception as e:
-            logging.error(f"Error in get_by_role: {e}")
-            return []
+        results = self.conn.execute(
+            "SELECT * FROM accounts WHERE role = ? ORDER BY name", (role,)
+        ).fetchall()
+        return [dict(row) for row in results]
 
     def get_all(self):
-        """Fetches all accounts ordered by name."""
-        try:
-            results = self.conn.execute(
-                "SELECT * FROM accounts ORDER BY name"
-            ).fetchall()
-
-            formatted = [dict(row) for row in results]
-            return formatted
-        except Exception as e:
-            logging.error(f"Error in get_all: {e}")
-            return []
+        results = self.conn.execute(
+            "SELECT * FROM accounts ORDER BY name"
+        ).fetchall()
+        return [dict(row) for row in results]
 
     def add(self, name, role, phone, email, address):
         with self.conn:

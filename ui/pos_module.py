@@ -465,8 +465,14 @@ class POSFrame(ctk.CTkFrame):
         return e
 
     def _update_totals(self, subtotal_usd, rate):
-        self.total_usd_lbl.configure(text=f"${subtotal_usd:.2f}")
-        self.total_syp_lbl.configure(text=f"{subtotal_usd * rate:,.0f} SYP")
+        try:
+            discount = float(self.discount_entry.get() or 0) / 100
+            tax      = float(self.tax_entry.get() or 0) / 100
+        except ValueError:
+            discount = tax = 0.0
+        final_usd = (subtotal_usd * (1 - discount)) * (1 + tax)
+        self.total_usd_lbl.configure(text=f"${final_usd:.2f}")
+        self.total_syp_lbl.configure(text=f"{final_usd * rate:,.0f} SYP")
         self.item_count_lbl.configure(text=f"{len(self.cart)} item{'s' if len(self.cart) != 1 else ''}")
 
         has_pos = any(i["qty"] > 0 for i in self.cart)

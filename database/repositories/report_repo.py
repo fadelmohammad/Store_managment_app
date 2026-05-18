@@ -1,57 +1,9 @@
+# report_repo.py
 import logging
 
 class ReportRepository:
     def __init__(self, conn):
         self.conn = conn
-
-    # ==========================================
-    # Invoice Reports
-    # ==========================================
-
-    def get_all_invoices(self, date_clause=""):
-        """
-        Get all invoices with optional date filter
-        date_clause: SQL WHERE clause for date filtering (e.g., "WHERE date >= date('now')")
-        """
-        query = f"""
-            SELECT i.id, i.type, i.date, a.name AS partner_name, 
-                   i.total, i.payment_method, i.status, i.tax, i.discount
-            FROM invoices i
-            LEFT JOIN accounts a ON i.partner_id = a.id
-            {date_clause}
-            ORDER BY i.id DESC
-        """
-        return self.conn.execute(query).fetchall()
-
-    def get_invoice_by_id(self, invoice_id):
-        """Get a single invoice with partner details"""
-        return self.conn.execute("""
-            SELECT i.*, a.name as partner_name 
-            FROM invoices i 
-            LEFT JOIN accounts a ON i.partner_id = a.id 
-            WHERE i.id = ?
-        """, (invoice_id,)).fetchone()
-
-    def get_invoice_items(self, invoice_id):
-        """Get all items for a specific invoice"""
-        return self.conn.execute("""
-            SELECT p.name, ii.quantity, ii.price, (ii.quantity * ii.price) as subtotal
-            FROM invoice_items ii
-            JOIN products p ON ii.product_id = p.id
-            WHERE ii.invoice_id = ?
-        """, (invoice_id,)).fetchall()
-
-    def get_invoice_count(self, date_clause=""):
-        """Get total number of invoices with optional date filter"""
-        query = f"SELECT COUNT(*) as count FROM invoices i {date_clause}"
-        result = self.conn.execute(query).fetchone()
-        return result[0] if result else 0
-
-    def get_invoice_total_sum(self, date_clause=""):
-        """Get sum of all invoice totals with optional date filter"""
-        query = f"SELECT SUM(total) as total FROM invoices i {date_clause}"
-        result = self.conn.execute(query).fetchone()
-        return result[0] if result and result[0] else 0.0
 
     # ==========================================
     # Inventory Reports
@@ -105,16 +57,6 @@ class ReportRepository:
             ORDER BY p.quantity ASC
         """, (threshold,)).fetchall()
 
-    def get_stock_value_by_category(self):
-        """Get inventory value grouped by category"""
-        return self.conn.execute("""
-            SELECT c.name as category, SUM(p.quantity * p.cost) as total_value
-            FROM products p
-            LEFT JOIN categories c ON p.category_id = c.id
-            GROUP BY c.id, c.name
-            ORDER BY total_value DESC
-        """).fetchall()
-
     # ==========================================
     # Stock Movement Reports
     # ==========================================
@@ -138,29 +80,6 @@ class ReportRepository:
         elif end_date:
             query += " WHERE sm.created_at <= ?"
             params = [end_date]
-        
-        query += " ORDER BY sm.created_at DESC"
-        
-        return self.conn.execute(query, params).fetchall()
-
-    def get_movements_by_product(self, product_id, start_date=None, end_date=None):
-        """Get stock movements for a specific product"""
-        query = """
-            SELECT sm.id, sm.movement_type, sm.quantity, sm.reason, sm.created_at
-            FROM stock_movements sm
-            WHERE sm.product_id = ?
-        """
-        params = [product_id]
-        
-        if start_date and end_date:
-            query += " AND sm.created_at BETWEEN ? AND ?"
-            params.extend([start_date, end_date])
-        elif start_date:
-            query += " AND sm.created_at >= ?"
-            params.append(start_date)
-        elif end_date:
-            query += " AND sm.created_at <= ?"
-            params.append(end_date)
         
         query += " ORDER BY sm.created_at DESC"
         

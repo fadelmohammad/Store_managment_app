@@ -3,7 +3,7 @@ import sqlite3
 from database.schema import initialize_database
 
 if __name__ == "__main__":
-    DB_NAME = "POS.db"
+    DB_NAME = "store.db"
     
     print(" بدء تهيئة قاعدة بيانات POS...")
     print("=" * 50)

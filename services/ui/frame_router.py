@@ -12,6 +12,7 @@ from ui.cashbox_module import CashboxFrame
 from ui.reports_module import ReportsFrame
 from ui.user_profile import UserProfileFrame
 from ui.user_management_module import UserManagementFrame
+from ui.backup_module import BackupFrame
 
 
 class FrameRouter:
@@ -91,6 +92,13 @@ class FrameRouter:
                 self.app,
                 self.app.user_service,
                 self.app.current_user,
+            )
+
+        if permissions.get("can_manage_settings", False) or role == "admin":
+            self.frames["backup"] = BackupFrame(
+                self.app.main_content_frame,
+                self.app,
+                self.app.backup_service,
             )
 
     def show_frame(self, name: str, save_history: bool = True) -> None:

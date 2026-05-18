@@ -7,7 +7,7 @@ from datetime import datetime
 
 
 class ReportsFrame(ctk.CTkFrame):
-    def __init__(self, parent, app, db):
+    def __init__(self, parent, app, db=None):
         super().__init__(parent)
         self.app = app
         # All report data must come via report_service (UI → service → repo → DB).
@@ -298,13 +298,3 @@ class ReportsFrame(ctk.CTkFrame):
         except Exception as e:
             logging.error(f"Inventory Report Error: {e}", exc_info=True)
 
-    def get_date_filter(self):
-        """Keep for backward compatibility - will be removed later"""
-        period = self.period_var.get()
-        if period == "Today":
-            return "AND e.date >= date('now')"
-        elif period == "Last 7 Days":
-            return "AND e.date >= date('now', '-7 days')"
-        elif period == "This Month":
-            return "AND e.date >= date('now', 'start of month')"
-        return ""
