@@ -6,8 +6,9 @@ venv/
 .DS_Store
 Thumbs.db
 *.log
-.sixth
-.qodo
+logs/
+.sixth/
+.qodo/
 .vscode
 *.csv
 *.png
@@ -15,11 +16,13 @@ Thumbs.db
 *.tmp
 garbage/
 *.bak
-.DS_Store
-Thumbs.db
 session.json
 store.db
 POS.db
 .amazonq/
-.qodo/
-.sixth/
+
+# Database backups (large binary files)
+backups/
+
+# Temporary test scripts
+temp_perf_test_large_db.py
