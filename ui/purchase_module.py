@@ -2,6 +2,7 @@
 
 import customtkinter as ctk
 from tkinter import ttk, messagebox
+from ui.print_dialog import PrintDialog  # Import the print dialog
 
 _GREEN  = ("#27ae60", "#2ecc71")
 _RED    = ("#c0392b", "#e74c3c")
@@ -33,6 +34,17 @@ class PurchaseFrame(ctk.CTkFrame):
             back_command=self.app.go_back,
             home_command=self.app.go_home,
         )
+        
+        # Add Print button
+        ctk.CTkButton(
+            nav,
+            text="Print",
+            width=100,
+            fg_color="#3498db",
+            hover_color="#2980b9",
+            command=self.open_print_dialog
+        ).pack(side="left", padx=5)
+        
         ctk.CTkLabel(nav, text="Purchase", font=ctk.CTkFont(size=15, weight="bold")).pack(side="right", padx=20)
 
     def _build_body(self):
@@ -445,3 +457,7 @@ class PurchaseFrame(ctk.CTkFrame):
         self.supplier_var.set(name)
         self.selected_supplier_id = self.supplier_map.get(name)
         self._hide_supplier_results()
+
+    def open_print_dialog(self):
+        """Open print dialog"""
+        PrintDialog(self, self.app)

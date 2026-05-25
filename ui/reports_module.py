@@ -4,6 +4,7 @@ import customtkinter as ctk
 import logging
 from tkinter import ttk, messagebox
 from datetime import datetime
+from ui.print_dialog import PrintDialog  # Import the print dialog
 
 
 class ReportsFrame(ctk.CTkFrame):
@@ -20,6 +21,16 @@ class ReportsFrame(ctk.CTkFrame):
             back_command=self.app.go_back,
             home_command=self.app.go_home,
         )
+        
+        # Add Print button
+        ctk.CTkButton(
+            nav_bar,
+            text="Print",
+            width=100,
+            fg_color="#3498db",
+            hover_color="#2980b9",
+            command=self.open_print_dialog
+        ).pack(side="left", padx=5)
 
         # Date Filter
         self.period_var = ctk.StringVar(value="All Time")
@@ -146,6 +157,11 @@ class ReportsFrame(ctk.CTkFrame):
                         f"TOTAL: €{total:.2f}")
 
         ctk.CTkLabel(bot_f, text=summary_text, font=("Arial", 14, "bold")).pack(side="right")
+
+    def open_print_dialog(self):
+        """Open print dialog"""
+        PrintDialog(self, self.app)
+
     # ==========================================
     # PROFIT & LOSS SECTION
     # ==========================================
