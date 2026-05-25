@@ -7,6 +7,7 @@ import csv
 import os
 from datetime import datetime
 from collections import defaultdict
+from ui.print_dialog import PrintDialog  # Import the print dialog
 
 
 class InventoryFrame(ctk.CTkFrame):
@@ -37,6 +38,16 @@ class InventoryFrame(ctk.CTkFrame):
         ctk.CTkButton(nav_bar, text="Home", width=100, command=self.app.go_home).pack(
             side="left", padx=5
         )
+        
+        # Add Print button
+        ctk.CTkButton(
+            nav_bar,
+            text="Print",
+            width=100,
+            fg_color="#3498db",
+            hover_color="#2980b9",
+            command=self.open_print_dialog
+        ).pack(side="left", padx=5)
         
         ctk.CTkLabel(
             nav_bar, text="Inventory Management", font=("Arial", 16, "bold")
@@ -964,3 +975,7 @@ class InventoryFrame(ctk.CTkFrame):
                 vals = (d.get("date"), d.get("product"), m_type, qty_disp, d.get("reason"))
             
             tree.insert("", "end", values=vals)
+
+    def open_print_dialog(self):
+        """Open print dialog"""
+        PrintDialog(self, self.app)
