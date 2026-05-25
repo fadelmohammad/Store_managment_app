@@ -27,6 +27,7 @@ from services.accounts_service import AccountService
 from services.user_service import UserService
 from services.login_service import LoginService
 from services.invoices_service import InvoiceService
+from services.print_service import PrintService  # Import the print service
 from database.backup_service import BackupService
 from ui.sidebar_builder import build_sidebar
 
@@ -94,6 +95,9 @@ class StoreApp(ctk.CTk):
         self.ledger_service = LedgerService(self.conn)
         self.sales_service = SalesService(self.conn, self.ledger_service)
         self.purchase_service = PurchaseService(self.purchase_repo, self.product_repo, self.stock_repo, self.inventory_service, self.ledger_service, self.account_repo)
+
+        # Initialize the print service
+        self.print_service = PrintService(self)
 
         self.backup_service = BackupService()
         try:
