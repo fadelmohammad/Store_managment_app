@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 # ── Schema version ────────────────────────────────────────────────────────────
 # Bump this integer every time you add a migration step below.
 # Rule: never edit an existing migration — only append new ones.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4  # Updated to include payments table
 
 
 def get_schema_version(conn) -> int:
@@ -206,6 +206,31 @@ def _migrate_v2(conn):
 
 def _migrate_v3(conn):
     """
+    Add payments table for tracking account payments.
+    """
+    with conn:
+        conn.execute("""CREATE TABLE IF NOT EXISTS payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_id INTEGER,
+            amount REAL NOT NULL,
+            currency TEXT DEFAULT 'USD',
+            payment_type TEXT NOT NULL,
+            payment_method TEXT,
+            date DATETIME DEFAULT CURRENT_TIMESTAMP,
+            reference_number TEXT,
+            notes TEXT,
+            created_by INTEGER,
+            FOREIGN KEY(account_id) REFERENCES accounts(id)
+        )""")
+        
+        # Add indexes for performance
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_payments_account_id ON payments(account_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(date)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_payments_type ON payments(payment_type)")
+
+
+def _migrate_v4(conn):
+    """
     Placeholder for the next migration.
     Replace this body when you need to add tables/columns in the next version.
     """
@@ -213,7 +238,7 @@ def _migrate_v3(conn):
 
 
 # Ordered list — position+1 == version number. Never reorder.
-_MIGRATIONS = [_migrate_v1, _migrate_v2, _migrate_v3]
+_MIGRATIONS = [_migrate_v1, _migrate_v2, _migrate_v3, _migrate_v4]
 
 
 # ── Public API (called from main.py — signatures unchanged) ───────────────────
