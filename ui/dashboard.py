@@ -9,6 +9,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import numpy as np
 from collections import Counter
+from ui.print_dialog import PrintDialog  # Import the print dialog
 
 plt.rcParams["font.family"] = "DejaVu Sans"
 plt.rcParams["axes.unicode_minus"] = False
@@ -28,6 +29,37 @@ class DashboardFrame(ctk.CTkFrame):
         self.refresh_stats()
 
     def setup_main_area(self):
+        # Create navigation bar first
+        nav_bar = ctk.CTkFrame(self, fg_color="transparent")
+        nav_bar.pack(side="top", fill="x", padx=10, pady=5)
+
+        ctk.CTkButton(
+            nav_bar,
+            text="Back",
+            width=100,
+            fg_color="#444444",
+            hover_color="#555555",
+            command=self.app.go_back,
+        ).pack(side="left", padx=5)
+        
+        ctk.CTkButton(nav_bar, text="Home", width=100, command=self.app.go_home).pack(
+            side="left", padx=5
+        )
+        
+        # Add Print button
+        ctk.CTkButton(
+            nav_bar,
+            text="Print",
+            width=100,
+            fg_color="#3498db",
+            hover_color="#2980b9",
+            command=self.open_print_dialog
+        ).pack(side="left", padx=5)
+        
+        ctk.CTkLabel(
+            nav_bar, text="Dashboard", font=("Arial", 16, "bold")
+        ).pack(side="right", padx=20)
+
         self.main_container = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.main_container.pack(fill="both", expand=True, padx=20, pady=20)
 
@@ -467,3 +499,7 @@ class DashboardFrame(ctk.CTkFrame):
 
         except ValueError:
             messagebox.showwarning("Input Error", "Please enter a valid positive number.")
+
+    def open_print_dialog(self):
+        """Open print dialog"""
+        PrintDialog(self, self.app)
