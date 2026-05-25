@@ -1,4 +1,5 @@
 # account_repo.py
+import logging
 
 
 class AccountRepository:
@@ -35,15 +36,27 @@ class AccountRepository:
 
     def update(self, account_id, data):
         """Executes the update query on the database."""
-        query = """
-            UPDATE accounts 
-            SET name=?, role=?, phone=?, email=?, address=? 
-            WHERE id=?
-        """
-        params = (
-            data['name'], data['role'], data['phone'], 
-            data['email'], data['address'], account_id
-        )
+        # Check if balance field is present in the data to update
+        if 'balance' in data:
+            query = """
+                UPDATE accounts 
+                SET name=?, role=?, phone=?, email=?, address=?, balance=? 
+                WHERE id=?
+            """
+            params = (
+                data['name'], data['role'], data['phone'], 
+                data['email'], data['address'], data['balance'], account_id
+            )
+        else:
+            query = """
+                UPDATE accounts 
+                SET name=?, role=?, phone=?, email=?, address=? 
+                WHERE id=?
+            """
+            params = (
+                data['name'], data['role'], data['phone'], 
+                data['email'], data['address'], account_id
+            )
         
         with self.conn:
             self.conn.execute(query, params)

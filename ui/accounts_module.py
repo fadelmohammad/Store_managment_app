@@ -2,6 +2,8 @@
 
 import customtkinter as ctk
 from tkinter import ttk, messagebox
+from ui.print_dialog import PrintDialog  # Import the print dialog
+import tkinter as tk  # Need this for the new dialogs
 
 
 class AccountsFrame(ctk.CTkFrame):
@@ -10,9 +12,21 @@ class AccountsFrame(ctk.CTkFrame):
         self.app = app
         self.account_service = account_service
         self.selected_account_id = None
+        self.payment_service = getattr(app, 'payment_service', None)  # Get payment service from app
 
         # --- NAVIGATION BAR ---
         nav_bar = self.app.ui_service.create_back_home_nav(self, back_text="Back", home_text="Home")
+        
+        # Add Print button
+        ctk.CTkButton(
+            nav_bar,
+            text="Print",
+            width=100,
+            fg_color="#3498db",
+            hover_color="#2980b9",
+            command=self.open_print_dialog
+        ).pack(side="left", padx=5)
+        
         ctk.CTkLabel(
             nav_bar,
             text="Partner Management",
@@ -117,7 +131,25 @@ class AccountsFrame(ctk.CTkFrame):
             text="Delete Account",
             fg_color="#e74c3c",
             command=self.delete_account,
-        ).pack(fill="x", pady=20)
+        ).pack(fill="x", pady=5)
+
+        # Payment and History buttons
+        payment_btn_frame = ctk.CTkFrame(right_panel, fg_color="transparent")
+        payment_btn_frame.pack(fill="x", pady=10, padx=25)
+
+        ctk.CTkButton(
+            payment_btn_frame,
+            text="Record Payment",
+            fg_color="#9b59b6",
+            command=self.record_payment,
+        ).pack(fill="x", pady=5)
+
+        ctk.CTkButton(
+            payment_btn_frame,
+            text="View History",
+            fg_color="#f39c12",
+            command=self.view_payment_history,
+        ).pack(fill="x", pady=5)
 
         self.refresh_list()
 
@@ -129,6 +161,40 @@ class AccountsFrame(ctk.CTkFrame):
         entry = ctk.CTkEntry(parent)
         entry.pack(fill="x", padx=25, pady=(0, 15))
         return entry
+
+    # ==========================================
+    # PAYMENT FUNCTIONALITY
+    # ==========================================
+    def record_payment(self):
+        """Open a dialog to record a payment for the selected account."""
+        if not self.selected_account_id:
+            messagebox.showwarning("Select", "Please select an account from the list first.")
+            return
+
+        if not self.payment_service:
+            messagebox.showerror("Error", "Payment service not available.")
+            return
+
+        # Create a modal dialog for recording payment
+        payment_dialog = PaymentDialog(self, self.app, self.selected_account_id, self.payment_service)
+        payment_dialog.grab_set()  # Make dialog modal
+        self.wait_window(payment_dialog)  # Wait for dialog to close
+        self.refresh_list()  # Refresh the account list after payment is recorded
+
+    def view_payment_history(self):
+        """Open a dialog to view payment history for the selected account."""
+        if not self.selected_account_id:
+            messagebox.showwarning("Select", "Please select an account from the list first.")
+            return
+
+        if not self.payment_service:
+            messagebox.showerror("Error", "Payment service not available.")
+            return
+
+        # Create a modal dialog to view payment history
+        history_dialog = PaymentHistoryDialog(self, self.app, self.selected_account_id, self.payment_service)
+        history_dialog.grab_set()  # Make dialog modal
+        self.wait_window(history_dialog)  # Wait for dialog to close
 
     # ==========================================
     # LOGIC
@@ -256,3 +322,221 @@ class AccountsFrame(ctk.CTkFrame):
             messagebox.showerror("Blocked", str(e))
         except Exception as e:
             messagebox.showerror("Error", f"Failed to delete account: {str(e)}")
+
+    def open_print_dialog(self):
+        """Open print dialog"""
+        PrintDialog(self, self.app)
+
+
+class PaymentDialog(ctk.CTkToplevel):
+    """Modal dialog for recording payments."""
+    
+    def __init__(self, parent, app, account_id, payment_service):
+        super().__init__(parent)
+        self.parent = parent
+        self.app = app
+        self.account_id = account_id
+        self.payment_service = payment_service
+
+        self.title("Record Payment")
+        self.geometry("400x450")
+        self.resizable(False, False)
+
+        # Center the window
+        self.transient(parent)
+        self.grab_set()
+        self.focus_set()
+
+        # Get account info
+        account = self.app.account_service.get_by_id(account_id)
+        self.account_name = account.get("name", "Unknown")
+
+        # Title
+        ctk.CTkLabel(self, text=f"Record Payment for {self.account_name}", font=("Arial", 16, "bold")).pack(pady=20)
+
+        # Amount input
+        ctk.CTkLabel(self, text="Amount ($)").pack(anchor="w", padx=25)
+        self.amount_entry = ctk.CTkEntry(self)
+        self.amount_entry.pack(fill="x", padx=25, pady=(0, 15))
+
+        # Payment Type
+        ctk.CTkLabel(self, text="Payment Type").pack(anchor="w", padx=25)
+        self.payment_type_var = ctk.StringVar(value="Payment In")
+        self.payment_type_dropdown = ctk.CTkOptionMenu(
+            self,
+            values=["Payment In", "Payment Out"],
+            variable=self.payment_type_var,
+        )
+        self.payment_type_dropdown.pack(fill="x", padx=25, pady=(0, 15))
+
+        # Payment Method
+        ctk.CTkLabel(self, text="Payment Method").pack(anchor="w", padx=25)
+        self.payment_method_var = ctk.StringVar(value="Cash")
+        self.payment_method_dropdown = ctk.CTkOptionMenu(
+            self,
+            values=["Cash", "Bank Transfer", "Check", "Credit Card", "Other"],
+            variable=self.payment_method_var,
+        )
+        self.payment_method_dropdown.pack(fill="x", padx=25, pady=(0, 15))
+
+        # Reference Number
+        ctk.CTkLabel(self, text="Reference Number (Optional)").pack(anchor="w", padx=25)
+        self.ref_entry = ctk.CTkEntry(self)
+        self.ref_entry.pack(fill="x", padx=25, pady=(0, 15))
+
+        # Notes
+        ctk.CTkLabel(self, text="Notes (Optional)").pack(anchor="w", padx=25)
+        self.notes_text = ctk.CTkTextbox(self, height=60)
+        self.notes_text.pack(fill="x", padx=25, pady=(0, 15))
+
+        # Buttons
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=25, pady=20)
+
+        ctk.CTkButton(
+            btn_frame,
+            text="Cancel",
+            fg_color="#7f8c8d",
+            command=self.destroy
+        ).pack(side="left", fill="x", expand=True, padx=5)
+
+        ctk.CTkButton(
+            btn_frame,
+            text="Record Payment",
+            fg_color="#27ae60",
+            command=self.record_payment
+        ).pack(side="left", fill="x", expand=True, padx=5)
+
+    def record_payment(self):
+        """Record the payment in the database."""
+        try:
+            amount_str = self.amount_entry.get().strip()
+            if not amount_str:
+                messagebox.showwarning("Required", "Amount is required.")
+                return
+            
+            try:
+                amount = float(amount_str)
+                if amount <= 0:
+                    messagebox.showwarning("Invalid", "Amount must be greater than zero.")
+                    return
+            except ValueError:
+                messagebox.showerror("Invalid", "Amount must be a valid number.")
+                return
+
+            payment_type = self.payment_type_var.get()
+            payment_method = self.payment_method_var.get()
+            reference_number = self.ref_entry.get().strip() or None
+            notes = self.notes_text.get("1.0", "end-1c").strip() or None
+
+            # Record the payment using the service
+            user_id = getattr(self.app, 'current_user_id', None)  # Get current user ID from app
+            self.payment_service.add_payment(
+                account_id=self.account_id,
+                amount=amount,
+                payment_type=payment_type,
+                payment_method=payment_method,
+                reference_number=reference_number,
+                notes=notes,
+                created_by=user_id
+            )
+
+            messagebox.showinfo("Success", "Payment recorded successfully.")
+            self.destroy()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to record payment: {str(e)}")
+
+
+class PaymentHistoryDialog(ctk.CTkToplevel):
+    """Modal dialog for viewing payment history."""
+    
+    def __init__(self, parent, app, account_id, payment_service):
+        super().__init__(parent)
+        self.parent = parent
+        self.app = app
+        self.account_id = account_id
+        self.payment_service = payment_service
+
+        self.title("Payment History")
+        self.geometry("700x500")
+        self.resizable(True, True)
+
+        # Center the window
+        self.transient(parent)
+        self.grab_set()
+        self.focus_set()
+
+        # Get account info
+        account = self.app.account_service.get_by_id(account_id)
+        self.account_name = account.get("name", "Unknown")
+
+        # Title
+        ctk.CTkLabel(self, text=f"Payment History for {self.account_name}", font=("Arial", 16, "bold")).pack(pady=10)
+
+        # Create treeview for payment history
+        cols = ("Date", "Type", "Method", "Amount", "Reference", "Notes", "Created By")
+        self.history_tree = ttk.Treeview(self, columns=cols, show="headings", height=15)
+        for col in cols:
+            self.history_tree.heading(col, text=col)
+            if col == "Notes":
+                self.history_tree.column(col, width=150)
+            elif col in ["Date", "Amount"]:
+                self.history_tree.column(col, width=100)
+            else:
+                self.history_tree.column(col, width=80)
+
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.history_tree.yview)
+        self.history_tree.configure(yscrollcommand=scrollbar.set)
+
+        # Pack treeview and scrollbar
+        tree_frame = ctk.CTkFrame(self)
+        tree_frame.pack(fill="both", expand=True, padx=15, pady=5)
+        self.history_tree.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Refresh payment history
+        self.refresh_history()
+
+        # Close button
+        ctk.CTkButton(
+            self,
+            text="Close",
+            fg_color="#7f8c8d",
+            command=self.destroy
+        ).pack(pady=10)
+
+    def refresh_history(self):
+        """Refresh the payment history display."""
+        # Clear existing items
+        for i in self.history_tree.get_children():
+            self.history_tree.delete(i)
+
+        try:
+            # Get payment history from service
+            payments = self.payment_service.get_payment_history(self.account_id, limit=100)
+
+            for payment in payments:
+                # Format the date to be more readable
+                date_str = str(payment.get('date', ''))[:19]  # Remove milliseconds if present
+                
+                # Format the amount with sign based on type
+                amount = payment.get('amount', 0)
+                direction = payment.get('direction', '+')
+                formatted_amount = f"{direction}${abs(amount):,.2f}"
+
+                self.history_tree.insert(
+                    "",
+                    "end",
+                    values=(
+                        date_str,
+                        payment.get('payment_type', ''),
+                        payment.get('payment_method', ''),
+                        formatted_amount,
+                        payment.get('reference_number', ''),
+                        payment.get('notes', '')[:30] + "..." if len(str(payment.get('notes', ''))) > 30 else payment.get('notes', ''),  # Truncate long notes
+                        payment.get('created_by_username', 'System')
+                    )
+                )
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load payment history: {str(e)}")

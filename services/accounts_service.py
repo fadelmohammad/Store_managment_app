@@ -22,7 +22,7 @@ class AccountService:
         """
         Business-level listing:
         - role filter handled by repo where possible
-        - search filter handled in service (keeps UI free of SQL)
+        - search filter handled in service (keets UI free of SQL)
         """
         role = role or "All"
         search_normalized = (search or "").strip().lower()
@@ -109,3 +109,10 @@ class AccountService:
             raise PermissionError("Cannot delete account with a non-zero balance.")
 
         self.account_repo.delete(account_id)
+    
+    def get_account_balance(self, account_id: int) -> float:
+        """Get the current balance of an account."""
+        account = self.account_repo.get_by_id(account_id)
+        if not account:
+            raise ValueError("Account not found.")
+        return float(account.get("balance", 0.0))
