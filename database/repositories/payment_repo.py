@@ -17,7 +17,8 @@ class PaymentRepository:
                 """,
                 (account_id, amount, payment_type, payment_method, reference_number, notes, created_by)
             )
-            return cursor.lastrowid
+            row = cursor.fetchone()
+            return dict(row) if row else None
 
     def get_payments_by_account(self, account_id, limit=None):
         """Get all payments for a specific account."""
@@ -35,11 +36,19 @@ class PaymentRepository:
             params.append(limit)
             
         results = self.conn.execute(query, params).fetchall()
-        return [dict(row) for row in results]
+        # Ensure plain dict rows (UI/services expect .get())
+        converted = []
+        for row in results:
+            converted.append(dict(row) if not isinstance(row, dict) else row)
+        return converted
 
     def get_payment_by_id(self, payment_id):
-        """Get a specific payment by ID."""
-        return self.conn.execute(
+
+        """Get a specific payment by ID.
+
+        Always returns a plain dict (not sqlite3.Row) so callers can safely use .get(...).
+        """
+        row = self.conn.execute(
             """
             SELECT p.*, u.username as created_by_username
             FROM payments p
@@ -48,6 +57,8 @@ class PaymentRepository:
             """,
             (payment_id,)
         ).fetchone()
+        return dict(row) if row else None
+
 
     def get_all_payments(self, payment_type=None, date_from=None, date_to=None, limit=None):
         """Get all payments with optional filters."""
