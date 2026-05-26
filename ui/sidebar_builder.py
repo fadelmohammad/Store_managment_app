@@ -71,6 +71,15 @@ def build_sidebar(app, container, user, *, on_show_profile, on_logout, on_show_f
     if permissions.get("can_manage_settings", False) or user.get("role") == "admin":
         create_button("Backup & Restore", "backup")
 
+    # Control Panel hub (keeps Reports & Cashbox OUT by design)
+    if (
+        permissions.get("can_manage_users", False)
+        or permissions.get("can_manage_settings", False)
+        or user.get("role") == "admin"
+    ):
+        create_button("Control Panel", "control_panel")
+
+
     # Logout at bottom
     ctk.CTkButton(
         container,
