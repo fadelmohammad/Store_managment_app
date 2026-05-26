@@ -25,7 +25,8 @@ class PaymentService:
         account = self.account_repo.get_by_id(account_id)
         if not account:
             raise ValueError("Account not found")
-        
+        account = dict(account)
+
         # Add the payment record
         payment_id = self.payment_repo.add_payment(
             account_id, amount, payment_type, payment_method, reference_number, notes, created_by
@@ -106,6 +107,7 @@ class PaymentService:
         account = self.account_repo.get_by_id(account_id)
         if not account:
             raise ValueError("Account not found")
+        account = dict(account)
         
         # Revert the account balance based on the payment type
         current_balance = float(account.get("balance", 0.0))
