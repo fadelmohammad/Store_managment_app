@@ -48,7 +48,7 @@ class SalesService:
 
             if payment_method == "Credit":
                 target_account = "Accounts Receivable"
-                self.repo.update_account_balance(partner_id, total_usd)
+                self.repo.update_account_balance(partner_id, -total_usd)
             else:
                 target_account = "Cash"
 
