@@ -17,6 +17,7 @@ from database.repositories.settings_repo import SettingRepository
 from database.repositories.account_repo import AccountRepository
 from database.repositories.report_repo import ReportRepository
 from database.repositories.purchase_repo import PurchaseRepository
+from database.repositories.payment_repo import PaymentRepository
 from services.inventory_service import InventoryService
 from services.category_service import CategoryService
 from services.report_service import ReportingService
@@ -24,6 +25,7 @@ from services.ledger_service import LedgerService
 from services.sales_service import SalesService
 from services.purchase_service import PurchaseService
 from services.accounts_service import AccountService
+from services.payment_service import PaymentService
 from services.user_service import UserService
 from services.login_service import LoginService
 from services.invoices_service import InvoiceService
@@ -69,6 +71,8 @@ class StoreApp(ctk.CTk):
         self.setting_repo = SettingRepository(self.conn)
         self.account_repo = AccountRepository(self.conn)
         self.account_service = AccountService(self.account_repo)
+        self.payment_repo = PaymentRepository(self.conn)
+        self.payment_service = PaymentService(self.payment_repo, self.account_repo)
 
         self.invoice_repo = None  # not used; invoice reads go via InvoiceService
         self.invoice_service = InvoiceService(self.conn)
