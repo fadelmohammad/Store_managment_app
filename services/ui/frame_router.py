@@ -13,6 +13,8 @@ from ui.reports_module import ReportsFrame
 from ui.user_profile import UserProfileFrame
 from ui.user_management_module import UserManagementFrame
 from ui.backup_module import BackupFrame
+from ui.control_panel_module import ControlPanelFrame
+
 
 
 class FrameRouter:
@@ -100,6 +102,15 @@ class FrameRouter:
                 self.app,
                 self.app.backup_service,
             )
+
+        # Control Panel (hub)
+        if (
+            permissions.get("can_manage_users", False)
+            or permissions.get("can_manage_settings", False)
+            or role == "admin"
+        ):
+            self.frames["control_panel"] = ControlPanelFrame(self.app.main_content_frame, self.app)
+
 
     def show_frame(self, name: str, save_history: bool = True) -> None:
         if self.current_frame_name == name:
